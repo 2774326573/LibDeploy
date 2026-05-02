@@ -183,11 +183,3 @@ Additional bundled tool:
 | Tool | Location | Note |
 | --- | --- | --- |
 | Everything tools | `tools/everything/` | Bundled helper tool. Everything is not an open source project. |
-
-Keep these directories in the repository because the current build/release flow depends on them:
-
-```text
-third_party/
-runtime/
-tools/
-```
