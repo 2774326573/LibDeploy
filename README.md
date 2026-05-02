@@ -9,6 +9,15 @@
 </p>
 
 <p align="center">
+  <a href="#highlights">Highlights</a> ·
+  <a href="#frontends">Frontends</a> ·
+  <a href="#build">Build</a> ·
+  <a href="#repository-layout">Layout</a> ·
+  <a href="#dependencies">Dependencies</a> ·
+  <a href="#open-source-projects-used">Open Source</a>
+</p>
+
+<p align="center">
   <a href="README.zh-CN.md">简体中文</a> · <strong>English</strong>
 </p>
 
@@ -20,9 +29,13 @@
   <img alt="Qt" src="https://img.shields.io/badge/UI-Qt%20Widgets-41CD52">
   <img alt="Installer" src="https://img.shields.io/badge/installer-NSIS-6E56CF">
   <img alt="i18n" src="https://img.shields.io/badge/i18n-en%20%7C%20zh--CN-24B47E">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
 
-LibDeploy scans an EXE/DLL, classifies its runtime dependencies, collects related resource folders, and produces a deployable directory, ZIP package, or NSIS installer.
+> LibDeploy scans an EXE/DLL, classifies its runtime dependencies, collects related resource folders, and produces a deployable directory, ZIP package, or NSIS installer.
+
+<!-- Tip: If you uploaded screenshots, set the path here, e.g. assets/screenshot.png -->
+<!-- ![Screenshot](assets/screenshot.png) -->
 
 ## Highlights
 
@@ -182,4 +195,12 @@ Additional bundled tool:
 
 | Tool | Location | Note |
 | --- | --- | --- |
-| Everything tools | `tools/everything/` | Bundled helper tool. Everything is not an open source project. |
+| Everything tools | `tools/everything/` | Bundled helper tool. Everything is not an open source project. Everything is not an open source project. |
+
+Keep these directories in the repository because the current build/release flow depends on them:
+
+```text
+third_party/
+runtime/
+tools/
+```
