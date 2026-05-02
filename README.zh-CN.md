@@ -296,5 +296,5 @@ flowchart LR
 #### 提交看板
 
 <p align="center">
-  <img src="https://repobeats.axiom.co/api/embed/ec4a67b7db8fa562e4b268110907cb346e362101.svg " alt="Repository Beats">
+  <img src="https://repobeats.axiom.co/api/embed/ec4a67b7db8fa562e4b268110907cb346e362101.svg" alt="Repository Beats">
 </p>
