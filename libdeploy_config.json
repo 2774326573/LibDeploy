@@ -1,0 +1,22 @@
+{
+  "classifier": {
+    "extra_os_core": [],
+    "extra_redist": [],
+    "user_excluded": []
+  },
+  "deploy": {
+    "bundle_redist_installer": false,
+    "copy_redist_dlls": true
+  },
+  "follow_system_path": false,
+  "last_target": "",
+  "nsis": {
+    "makensis_path": "C:/Program Files (x86)/NSIS/makensis.exe",
+    "redist_cache_dir": ""
+  },
+  "qt_deploy_tool": "",
+  "search_paths": [],
+  "target_os": "windows10",
+  "ui_language": "",
+  "ui_theme": "system"
+}

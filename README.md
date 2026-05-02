@@ -1,0 +1,193 @@
+<p align="center">
+  <img src="assets/libdeploy.svg" width="96" height="96" alt="LibDeploy logo">
+</p>
+
+<h1 align="center">LibDeploy</h1>
+
+<p align="center">
+  Windows dependency analysis and packaging tool for desktop applications.
+</p>
+
+<p align="center">
+  <a href="README.zh-CN.md">简体中文</a> · <strong>English</strong>
+</p>
+
+<p align="center">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-0078D7">
+  <img alt="C++" src="https://img.shields.io/badge/C%2B%2B-17-00599C">
+  <img alt="CMake" src="https://img.shields.io/badge/build-CMake-064F8C">
+  <img alt="wxWidgets" src="https://img.shields.io/badge/UI-wxWidgets-2D7DD2">
+  <img alt="Qt" src="https://img.shields.io/badge/UI-Qt%20Widgets-41CD52">
+  <img alt="Installer" src="https://img.shields.io/badge/installer-NSIS-6E56CF">
+  <img alt="i18n" src="https://img.shields.io/badge/i18n-en%20%7C%20zh--CN-24B47E">
+</p>
+
+LibDeploy scans an EXE/DLL, classifies its runtime dependencies, collects related resource folders, and produces a deployable directory, ZIP package, or NSIS installer.
+
+## Highlights
+
+| Area | What It Does |
+| --- | --- |
+| Dependency analysis | Parses PE import tables and builds a dependency tree |
+| DLL classification | Separates OS DLLs, third-party DLLs, redistributables, and ApiSet DLLs |
+| Resource packaging | Keeps folders such as `assets/`, `images/`, `scripts/`, `docs/`, `plugins/`, `packages/`, and `webview2_runtime/` |
+| Deployment | Copies required files into a clean deployment directory |
+| Packaging | Creates ZIP archives and NSIS installers |
+| Installer polish | Adds Start Menu and desktop shortcuts |
+| Compatibility checks | Warns about WebView2 Runtime versions that are not compatible with Windows 7 / 8.1 |
+| UI | Chinese/English language support and light/dark/system themes |
+
+## Frontends
+
+LibDeploy ships with two desktop frontends that share the same core engine.
+
+| Frontend | Path | Build Dependencies | Notes |
+| --- | --- | --- | --- |
+| wxWidgets | `app/` | CMake + MinGW-w64 only | wxWidgets and runtime DLLs are bundled in the repo |
+| Qt Widgets | `qt_frontend/` | CMake + Qt SDK + MSVC toolchain | Qt runtime is copied into the release folder by `windeployqt` |
+
+Shared core:
+
+```text
+engine/     PE parsing, DLL classification, dependency resolution, deployment
+config/     JSON configuration
+```
+
+## Build
+
+Detailed build instructions are in [docs/BUILD.md](docs/BUILD.md).
+
+### wxWidgets Build
+
+Required tools:
+
+- CMake 3.20+
+- MinGW-w64 GCC 13+
+
+All other wxWidgets build dependencies are bundled:
+
+```text
+third_party/wxwidgets/
+third_party/zlib/
+third_party/minizip/
+third_party/nlohmann/
+runtime/
+tools/
+```
+
+No vcpkg, network access, or additional third-party installation is required for the wxWidgets build.
+
+```bat
+cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j4
+```
+
+Output:
+
+```text
+build/bin/LibDeploy.exe
+```
+
+### Qt Build
+
+Qt frontend reuses the same bundled core dependencies, but building the Qt UI requires a local Qt SDK.
+
+Required Qt components:
+
+- Qt Widgets
+- Qt Concurrent
+- Qt LinguistTools
+- `windeployqt`
+
+Validated local kit:
+
+```text
+Qt 5.12.12 msvc2017_64
+```
+
+```bat
+cmake -S .\qt_frontend -B .\build_qt ^
+  -DCMAKE_PREFIX_PATH=C:\Qt\Qt5.12.12\5.12.12\msvc2017_64
+cmake --build .\build_qt --config Release -j4
+```
+
+Output:
+
+```text
+build_qt/bin/Release/LibDeployQt.exe
+```
+
+After build, Qt DLLs, plugins, MSVC runtime DLLs, NSIS tools, config files, and translations are copied into the release folder. End users do not need to install Qt separately.
+
+## Repository Layout
+
+```text
+LibDeploy/
+├── app/                  wxWidgets frontend
+├── qt_frontend/          Qt Widgets frontend
+├── engine/               Core dependency analysis and deployment logic
+├── config/               JSON configuration management
+├── cmake/                CMake helper scripts
+├── docs/                 Project documentation
+├── locale/               wxWidgets .po translation sources
+├── assets/               Application icons and source assets
+├── third_party/          Bundled source/prebuilt third-party dependencies
+├── runtime/              MinGW runtime DLLs for wxWidgets release
+├── tools/                Bundled deployment tools
+├── CMakeLists.txt
+├── libdeploy_config.json
+└── .gitignore
+```
+
+## Dependencies
+
+### Bundled for wxWidgets Frontend
+
+| Dependency | Location | Purpose |
+| --- | --- | --- |
+| wxWidgets 3.3.1 | `third_party/wxwidgets/` | wxWidgets UI, prebuilt x64 MinGW dynamic package |
+| zlib | `third_party/zlib/` | Compression support |
+| minizip | `third_party/minizip/` | ZIP packaging |
+| nlohmann/json | `third_party/nlohmann/` | JSON config parsing |
+| MinGW runtime | `runtime/` | Runtime DLLs copied next to `LibDeploy.exe` |
+| NSIS | `tools/nsis/` | Installer generation |
+
+### Used by Qt Frontend
+
+| Dependency | Source | Purpose |
+| --- | --- | --- |
+| zlib | `third_party/zlib/` | Shared compression dependency |
+| minizip | `third_party/minizip/` | Shared ZIP packaging dependency |
+| nlohmann/json | `third_party/nlohmann/` | Shared JSON config parsing |
+| NSIS | `tools/nsis/` | Installer generation |
+| Qt Widgets | Local Qt SDK | Qt UI |
+| Qt Concurrent | Local Qt SDK | Background analysis/deployment tasks |
+| Qt LinguistTools | Local Qt SDK | Translation compilation |
+| MSVC runtime | Visual Studio / Build Tools | Copied into Qt release folder |
+
+## Open Source Projects Used
+
+| Project | Used For | License |
+| --- | --- | --- |
+| wxWidgets | wxWidgets frontend | wxWindows Library Licence |
+| Qt | Qt frontend | LGPL/GPL/commercial, depending on your Qt SDK |
+| zlib | Compression | zlib License |
+| minizip | ZIP packaging | zlib License |
+| nlohmann/json | JSON config | MIT License |
+| NSIS | Installer generation | zlib/libpng-style license |
+| GCC / MinGW-w64 runtime | wxWidgets runtime | GPL runtime exception / MinGW-w64 licenses |
+| CMake | Build system | BSD 3-Clause License |
+
+Additional bundled tool:
+
+| Tool | Location | Note |
+| --- | --- | --- |
+| Everything tools | `tools/everything/` | Bundled helper tool. Everything is not an open source project. |
+
+Keep these directories in the repository because the current build/release flow depends on them:
+
+```text
+third_party/
+runtime/
+tools/
+```

@@ -1,0 +1,130 @@
+#pragma once
+
+#include <QFutureWatcher>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QMainWindow>
+#include <QPlainTextEdit>
+#include <QProgressDialog>
+#include <QPushButton>
+#include <QTextEdit>
+#include <QTreeWidget>
+#include <QComboBox>
+#include <QGroupBox>
+#include <QTranslator>
+
+#include "config/config_manager.h"
+#include "engine/dep_result.h"
+
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
+
+class MainWindow : public QMainWindow {
+    Q_OBJECT
+
+public:
+    explicit MainWindow(QWidget* parent = nullptr);
+    ~MainWindow() override = default;
+
+private:
+    struct AnalyzeResult {
+        DepReport report;
+        QStringList logs;
+    };
+
+    struct DeployResult {
+        int copied = 0;
+        QStringList errors;
+        QStringList logs;
+    };
+
+    QLineEdit*      m_exePath = nullptr;
+    QComboBox*      m_targetOs = nullptr;
+    QTreeWidget*    m_tree = nullptr;
+    QListWidget*    m_searchPaths = nullptr;
+    QPlainTextEdit* m_log = nullptr;
+    QGroupBox*      m_redistPanel = nullptr;
+    QTextEdit*      m_redistText = nullptr;
+    QLabel*         m_detailName = nullptr;
+    QLabel*         m_detailPath = nullptr;
+    QLabel*         m_detailCategory = nullptr;
+    QLabel*         m_exeLabel = nullptr;
+    QLabel*         m_targetOsLabel = nullptr;
+    QLabel*         m_tipLabel = nullptr;
+    QLabel*         m_logLabel = nullptr;
+    QGroupBox*      m_detailGroup = nullptr;
+    QGroupBox*      m_pathsGroup = nullptr;
+
+    QPushButton*    m_browseButton = nullptr;
+    QPushButton*    m_analyzeButton = nullptr;
+    QPushButton*    m_deployButton = nullptr;
+    QPushButton*    m_reportButton = nullptr;
+    QPushButton*    m_copyButton = nullptr;
+    QPushButton*    m_zipButton = nullptr;
+    QPushButton*    m_installerButton = nullptr;
+    QPushButton*    m_addPathButton = nullptr;
+    QPushButton*    m_removePathButton = nullptr;
+    QPushButton*    m_upPathButton = nullptr;
+    QPushButton*    m_downPathButton = nullptr;
+
+    AppConfig m_config;
+    DepReport m_report;
+    bool      m_hasReport = false;
+    QString   m_currentLanguage;
+    QString   m_currentTheme;
+    std::unique_ptr<QTranslator> m_translator;
+
+    std::unique_ptr<QProgressDialog> m_progress;
+    QFutureWatcher<AnalyzeResult> m_analyzeWatcher;
+    QFutureWatcher<DeployResult>  m_deployWatcher;
+
+    void buildMenus();
+    void buildUi();
+    void loadConfig();
+    void saveConfig();
+    void initializeLanguage();
+    void setLanguage(const QString& language);
+    void initializeTheme();
+    void setTheme(const QString& theme);
+    void applyTheme();
+    void retranslateUi();
+
+    void openExecutable();
+    void analyze();
+    void deployToDefault();
+    void copyAll();
+    void packZip();
+    void generateInstaller();
+    void runQtDeploy();
+    void showReportDialog();
+    void addSearchPath();
+    void removeSearchPath();
+    void moveSearchPath(int direction);
+
+    void startAnalyze(bool runQtDeployTool = false);
+    void startDeploy(const QString& destDir);
+
+    void populateTree();
+    void addTreeNode(QTreeWidgetItem* parent,
+                     const std::shared_ptr<DepNode>& node,
+                     std::unordered_set<std::string>& expanded);
+    void updateDetails(QTreeWidgetItem* item);
+    void updateRedistPanel();
+    void refreshSearchPaths();
+    void setBusy(bool busy, const QString& title = {}, const QString& text = {});
+    void appendLog(const QString& text);
+
+    TargetOs selectedTargetOs() const;
+    QString categoryText(DllCategory category) const;
+    QString statusText(DepStatus status) const;
+    QIcon iconForNode(const DepNode& node) const;
+    QString buildFullReport() const;
+    void collectParentMap(const DepNode& node,
+                          std::unordered_map<std::string, std::vector<std::string>>& parents,
+                          std::unordered_set<std::string>& visited) const;
+
+    static QString qstr(const std::string& value);
+    static std::string str(const QString& value);
+};

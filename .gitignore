@@ -1,0 +1,95 @@
+# Build directories
+/build/
+/build_qt/
+/out/
+/dist/
+/release/
+/debug/
+/_deps/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+*.cmake.user
+
+# Visual Studio / MSVC
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.vcxproj.user
+*.opensdf
+*.sdf
+*.ipch
+*.tlog
+*.lastbuildstate
+
+# MinGW / compiler outputs
+*.o
+*.obj
+*.lo
+*.la
+*.ilk
+*.pdb
+*.idb
+*.exp
+*.map
+
+# Generated binaries and packages
+*.exe
+*.msi
+*.nsi
+*.nsis
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+
+# Generated translation binaries
+*.mo
+*.qm
+
+# Runtime logs / temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.old
+*.orig
+*.swp
+*.swo
+*.pid
+
+# Python cache from scanned/packaged resources
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE/editor metadata
+.idea/
+.vscode/
+*.code-workspace
+
+# OS and local shell artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
+
+# LibDeploy generated outputs
+*_deploy/
+*_Setup.exe
+LibDeploy_startup.log
+LibDeployQt_startup.log
+
+# Keep intentionally vendored runtime DLLs and tools if they are already part
+# of the source tree. Build output directories above still stay ignored.
+!/runtime/*.dll
+!/tools/**

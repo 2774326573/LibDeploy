@@ -1,0 +1,373 @@
+# LibDeploy - 简体中文
+msgid ""
+msgstr ""
+"Project-Id-Version: LibDeploy 0.1\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_CN\n"
+
+# 标题栏
+msgid "LibDeploy - Dependency Analyzer"
+msgstr "LibDeploy - 依赖分析工具"
+
+# 菜单栏顶级标题
+msgid "&File"
+msgstr "文件(&F)"
+
+msgid "&Tools"
+msgstr "工具(&T)"
+
+msgid "&Help"
+msgstr "帮助(&H)"
+
+# 菜单 - 文件
+msgid "&Open EXE...\tCtrl+O"
+msgstr "打开 EXE(&O)...\tCtrl+O"
+
+msgid "&Analyze\tF5"
+msgstr "分析(&A)\tF5"
+
+msgid "E&xit"
+msgstr "退出(&X)"
+
+# 菜单 - 工具
+msgid "&Copy All Dependencies"
+msgstr "复制所有依赖(&C)"
+
+msgid "Pack &ZIP..."
+msgstr "打包 ZIP(&Z)..."
+
+msgid "Generate &Installer..."
+msgstr "生成安装包(&I)..."
+
+# 菜单 - 语言
+msgid "&Language"
+msgstr "语言(&L)"
+
+msgid "English"
+msgstr "English"
+
+msgid "Chinese (Simplified)"
+msgstr "简体中文"
+
+# 菜单 - 帮助
+msgid "&About"
+msgstr "关于(&A)"
+
+# 工具栏 / 按钮
+msgid "Browse..."
+msgstr "浏览..."
+
+msgid "Target OS:"
+msgstr "目标系统:"
+
+msgid "Windows 7"
+msgstr "Windows 7"
+
+msgid "Windows 8.1"
+msgstr "Windows 8.1"
+
+msgid "Windows 10"
+msgstr "Windows 10"
+
+msgid "Windows 11"
+msgstr "Windows 11"
+
+msgid "Analyze"
+msgstr "分析"
+
+msgid "Copy All"
+msgstr "全部复制"
+
+msgid "Pack ZIP"
+msgstr "打包 ZIP"
+
+msgid "Installer"
+msgstr "安装包"
+
+# 面板标签
+msgid "EXE:"
+msgstr "EXE 文件:"
+
+msgid "Detail"
+msgstr "详情"
+
+msgid "(select a node)"
+msgstr "(请选择一个节点)"
+
+msgid "Search Paths"
+msgstr "搜索路径"
+
+msgid "Add"
+msgstr "添加"
+
+msgid "Del"
+msgstr "删除"
+
+msgid "Up"
+msgstr "上移"
+
+msgid "Down"
+msgstr "下移"
+
+msgid "Redistributable Requirements:"
+msgstr "运行时依赖警告:"
+
+msgid "Log:"
+msgstr "日志:"
+
+msgid "Ready"
+msgstr "就绪"
+
+# 详情面板
+msgid "Name: "
+msgstr "名称: "
+
+msgid "Path: "
+msgstr "路径: "
+
+msgid "Category: "
+msgstr "类别: "
+
+msgid "(not found)"
+msgstr "(未找到)"
+
+msgid "OsCore (system)"
+msgstr "系统核心 (OsCore)"
+
+msgid "Redistributable"
+msgstr "可再发行运行时"
+
+msgid "Third-party"
+msgstr "第三方库"
+
+msgid "ApiSet (virtual)"
+msgstr "API 集 (虚拟转发)"
+
+msgid "Found"
+msgstr "已找到"
+
+msgid "System (always present)"
+msgstr "系统 DLL (必然存在)"
+
+msgid "Maybe absent on target"
+msgstr "目标机可能缺失"
+
+msgid "MISSING"
+msgstr "缺失"
+
+msgid "Excluded"
+msgstr "已排除"
+
+# 状态栏
+msgid "Found: %zu  Missing: %zu  Redist: %zu"
+msgstr "已找到: %zu  缺失: %zu  运行时: %zu"
+
+# 对话框
+msgid "Select executable"
+msgstr "选择可执行文件"
+
+msgid "Executables (*.exe;*.dll)|*.exe;*.dll|All files|*.*"
+msgstr "可执行文件 (*.exe;*.dll)|*.exe;*.dll|所有文件|*.*"
+
+msgid "Select search path"
+msgstr "选择搜索路径"
+
+msgid "Run Analyze first."
+msgstr "请先运行分析。"
+
+msgid "Please select an executable first."
+msgstr "请先选择一个可执行文件。"
+
+msgid "LibDeploy"
+msgstr "LibDeploy"
+
+msgid "ZIP packaging not yet implemented."
+msgstr "ZIP 打包功能尚未实现。"
+
+msgid "Installer generation not yet implemented."
+msgstr "安装包生成功能尚未实现。"
+
+msgid "Copy Complete"
+msgstr "复制完成"
+
+msgid "Copied %d files to:\n%s"
+msgstr "已复制 %d 个文件到:\n%s"
+
+msgid "About"
+msgstr "关于"
+
+msgid "LibDeploy v0.1\nDependency analyzer & deployer"
+msgstr "LibDeploy v0.1\n可执行文件依赖分析与部署工具"
+
+# 日志消息
+msgid "Analyzing: "
+msgstr "正在分析: "
+
+msgid "Done. "
+msgstr "完成. "
+
+msgid "ERROR: "
+msgstr "错误: "
+
+msgid "Run &Qt Deploy Tool..."
+msgstr "运行 Qt 部署工具(&Q)..."
+
+msgid "LibDeploy v0.1\nDependency analyzer & deployer\n\nAuthor: onewu\nEmail:  onewu867@gmail.com"
+msgstr "LibDeploy v0.1\n可执行文件依赖分析与部署工具\n\n作者: onewu\n邮箱: onewu867@gmail.com"
+
+msgid "Deploy"
+msgstr "部署"
+
+msgid "Report"
+msgstr "报告"
+
+msgid "Tip: this app's folder is searched first; system PATH is controlled by config."
+msgstr "提示: 优先搜索本工具目录；是否搜索系统 PATH 由配置控制。"
+
+msgid "Analyzing"
+msgstr "正在分析"
+
+msgid "Initializing..."
+msgstr "正在初始化..."
+
+msgid "Deploying"
+msgstr "正在部署"
+
+msgid "Starting..."
+msgstr "正在开始..."
+
+msgid "Deployed to:\n%s\n\nFiles copied: %d\nResource dirs: %zu\nData files: %zu"
+msgstr "已部署到:\n%s\n\n已复制文件: %d\n资源目录: %zu\n数据文件: %zu"
+
+msgid "\n\n[!] %d DLL(s) missing:"
+msgstr "\n\n[!] 缺失 %d 个 DLL:"
+
+msgid "\n  ... and %d more"
+msgstr "\n  ... 以及另外 %d 个"
+
+msgid "\n[x] %d error(s) - check the log."
+msgstr "\n[x] %d 个错误 - 请查看日志。"
+
+msgid "Deploy Complete"
+msgstr "部署完成"
+
+msgid "Select deployment destination directory"
+msgstr "选择部署目标目录"
+
+msgid "Deploying to: "
+msgstr "正在部署到: "
+
+msgid "Creating ZIP: "
+msgstr "正在创建 ZIP: "
+
+msgid "ZIP created:\n%s"
+msgstr "ZIP 已创建:\n%s"
+
+msgid "ZIP creation failed.\n"
+msgstr "ZIP 创建失败。\n"
+
+msgid "Using bundled NSIS: "
+msgstr "使用内置 NSIS: "
+
+msgid "Using system NSIS: "
+msgstr "使用系统 NSIS: "
+
+msgid "makensis.exe not found.\nBundled NSIS should be in nsis/ next to LibDeploy.exe."
+msgstr "未找到 makensis.exe。\n内置 NSIS 应位于 LibDeploy.exe 旁边的 nsis/ 目录中。"
+
+msgid "NSIS Not Found"
+msgstr "未找到 NSIS"
+
+msgid "Generating installer: "
+msgstr "正在生成安装包: "
+
+msgid "Installer created:\n%s"
+msgstr "安装包已创建:\n%s"
+
+msgid "Generate Installer"
+msgstr "生成安装包"
+
+msgid "Installer generation failed.\n"
+msgstr "安装包生成失败。\n"
+
+msgid "Path to windeployqt / linuxdeployqt (leave empty to auto-detect):"
+msgstr "windeployqt / linuxdeployqt 路径（留空自动检测）:"
+
+msgid "Qt Deploy Tool"
+msgstr "Qt 部署工具"
+
+msgid "Running Qt deploy tool..."
+msgstr "正在运行 Qt 部署工具..."
+
+msgid "Qt Deploy"
+msgstr "Qt 部署"
+
+msgid "Qt Deploy complete. "
+msgstr "Qt 部署完成。"
+
+msgid "Qt deploy tool finished. Tree refreshed."
+msgstr "Qt 部署工具已完成，依赖树已刷新。"
+
+msgid "Qt deploy tool failed or was not found.\nCheck the log for details."
+msgstr "Qt 部署工具失败或未找到。\n请查看日志了解详情。"
+
+msgid "  Status: "
+msgstr "  状态: "
+
+msgid "No analysis result."
+msgstr "没有分析结果。"
+
+msgid "Dependency Full Report\n"
+msgstr "完整依赖报告\n"
+
+msgid "Target: "
+msgstr "目标: "
+
+msgid "Deploy: %zu  |  Maybe absent: %zu  |  Missing: %zu\n"
+msgstr "待部署: %zu  |  可能缺失: %zu  |  缺失: %zu\n"
+
+msgid "\n[!] MISSING (%zu) — not found in any search path:\n"
+msgstr "\n[!] 缺失 (%zu) - 所有搜索路径中均未找到:\n"
+
+msgid "\n[+] To Copy (%zu) — will be deployed:\n"
+msgstr "\n[+] 待复制 (%zu) - 将被部署:\n"
+
+msgid "\n[~] Maybe Absent (%zu) — Redist, may need installer:\n"
+msgstr "\n[~] 可能缺失 (%zu) - 运行时依赖，可能需要安装器:\n"
+
+msgid "\n[*] Redistributable packages required on target:\n"
+msgstr "\n[*] 目标机器需要的可再发行包:\n"
+
+msgid "\n[d] Data Files (%zu) — non-DLL files from exe dir:\n"
+msgstr "\n[d] 数据文件 (%zu) - EXE 目录中的非 DLL 文件:\n"
+
+msgid "\n[>] Resource Dirs (%zu) — will be deployed recursively:\n"
+msgstr "\n[>] 资源目录 (%zu) - 将递归部署:\n"
+
+msgid "Full Dependency Report"
+msgstr "完整依赖报告"
+
+msgid "Copy to Clipboard"
+msgstr "复制到剪贴板"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "&Theme"
+msgstr "主题(&T)"
+
+msgid "System"
+msgstr "跟随系统"
+
+msgid "Light"
+msgstr "浅色"
+
+msgid "Dark"
+msgstr "深色"
+
+msgid "Theme changed."
+msgstr "主题已切换。"
+
+msgid "\n[!] Warnings (%zu):\n"
+msgstr "\n[!] 警告 (%zu):\n"

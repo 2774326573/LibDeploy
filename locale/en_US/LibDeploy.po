@@ -1,0 +1,373 @@
+# LibDeploy - English (United States)
+msgid ""
+msgstr ""
+"Project-Id-Version: LibDeploy 0.1\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: en_US\n"
+
+# Title bar
+msgid "LibDeploy - Dependency Analyzer"
+msgstr "LibDeploy - Dependency Analyzer"
+
+# Menu bar top-level
+msgid "&File"
+msgstr "&File"
+
+msgid "&Tools"
+msgstr "&Tools"
+
+msgid "&Help"
+msgstr "&Help"
+
+# Menu - File
+msgid "&Open EXE...\tCtrl+O"
+msgstr "&Open EXE...\tCtrl+O"
+
+msgid "&Analyze\tF5"
+msgstr "&Analyze\tF5"
+
+msgid "E&xit"
+msgstr "E&xit"
+
+# Menu - Tools
+msgid "&Copy All Dependencies"
+msgstr "&Copy All Dependencies"
+
+msgid "Pack &ZIP..."
+msgstr "Pack &ZIP..."
+
+msgid "Generate &Installer..."
+msgstr "Generate &Installer..."
+
+# Menu - Language
+msgid "&Language"
+msgstr "&Language"
+
+msgid "English"
+msgstr "English"
+
+msgid "Chinese (Simplified)"
+msgstr "Chinese (Simplified)"
+
+# Menu - Help
+msgid "&About"
+msgstr "&About"
+
+# Toolbar / Buttons
+msgid "Browse..."
+msgstr "Browse..."
+
+msgid "Target OS:"
+msgstr "Target OS:"
+
+msgid "Windows 7"
+msgstr "Windows 7"
+
+msgid "Windows 8.1"
+msgstr "Windows 8.1"
+
+msgid "Windows 10"
+msgstr "Windows 10"
+
+msgid "Windows 11"
+msgstr "Windows 11"
+
+msgid "Analyze"
+msgstr "Analyze"
+
+msgid "Copy All"
+msgstr "Copy All"
+
+msgid "Pack ZIP"
+msgstr "Pack ZIP"
+
+msgid "Installer"
+msgstr "Installer"
+
+# Panel labels
+msgid "EXE:"
+msgstr "EXE:"
+
+msgid "Detail"
+msgstr "Detail"
+
+msgid "(select a node)"
+msgstr "(select a node)"
+
+msgid "Search Paths"
+msgstr "Search Paths"
+
+msgid "Add"
+msgstr "Add"
+
+msgid "Del"
+msgstr "Del"
+
+msgid "Up"
+msgstr "Up"
+
+msgid "Down"
+msgstr "Down"
+
+msgid "Redistributable Requirements:"
+msgstr "Redistributable Requirements:"
+
+msgid "Log:"
+msgstr "Log:"
+
+msgid "Ready"
+msgstr "Ready"
+
+# Detail panel
+msgid "Name: "
+msgstr "Name: "
+
+msgid "Path: "
+msgstr "Path: "
+
+msgid "Category: "
+msgstr "Category: "
+
+msgid "(not found)"
+msgstr "(not found)"
+
+msgid "OsCore (system)"
+msgstr "OsCore (system)"
+
+msgid "Redistributable"
+msgstr "Redistributable"
+
+msgid "Third-party"
+msgstr "Third-party"
+
+msgid "ApiSet (virtual)"
+msgstr "ApiSet (virtual)"
+
+msgid "Found"
+msgstr "Found"
+
+msgid "System (always present)"
+msgstr "System (always present)"
+
+msgid "Maybe absent on target"
+msgstr "Maybe absent on target"
+
+msgid "MISSING"
+msgstr "MISSING"
+
+msgid "Excluded"
+msgstr "Excluded"
+
+# Status bar
+msgid "Found: %zu  Missing: %zu  Redist: %zu"
+msgstr "Found: %zu  Missing: %zu  Redist: %zu"
+
+# Dialogs
+msgid "Select executable"
+msgstr "Select executable"
+
+msgid "Executables (*.exe;*.dll)|*.exe;*.dll|All files|*.*"
+msgstr "Executables (*.exe;*.dll)|*.exe;*.dll|All files|*.*"
+
+msgid "Select search path"
+msgstr "Select search path"
+
+msgid "Run Analyze first."
+msgstr "Run Analyze first."
+
+msgid "Please select an executable first."
+msgstr "Please select an executable first."
+
+msgid "LibDeploy"
+msgstr "LibDeploy"
+
+msgid "ZIP packaging not yet implemented."
+msgstr "ZIP packaging not yet implemented."
+
+msgid "Installer generation not yet implemented."
+msgstr "Installer generation not yet implemented."
+
+msgid "Copy Complete"
+msgstr "Copy Complete"
+
+msgid "Copied %d files to:\n%s"
+msgstr "Copied %d files to:\n%s"
+
+msgid "About"
+msgstr "About"
+
+msgid "LibDeploy v0.1\nDependency analyzer & deployer"
+msgstr "LibDeploy v0.1\nDependency analyzer & deployer"
+
+# Log messages
+msgid "Analyzing: "
+msgstr "Analyzing: "
+
+msgid "Done. "
+msgstr "Done. "
+
+msgid "ERROR: "
+msgstr "ERROR: "
+
+msgid "Run &Qt Deploy Tool..."
+msgstr "Run &Qt Deploy Tool..."
+
+msgid "LibDeploy v0.1\nDependency analyzer & deployer\n\nAuthor: onewu\nEmail:  onewu867@gmail.com"
+msgstr "LibDeploy v0.1\nDependency analyzer & deployer\n\nAuthor: onewu\nEmail:  onewu867@gmail.com"
+
+msgid "Deploy"
+msgstr "Deploy"
+
+msgid "Report"
+msgstr "Report"
+
+msgid "Tip: this app's folder is searched first; system PATH is controlled by config."
+msgstr "Tip: this app's folder is searched first; system PATH is controlled by config."
+
+msgid "Analyzing"
+msgstr "Analyzing"
+
+msgid "Initializing..."
+msgstr "Initializing..."
+
+msgid "Deploying"
+msgstr "Deploying"
+
+msgid "Starting..."
+msgstr "Starting..."
+
+msgid "Deployed to:\n%s\n\nFiles copied: %d\nResource dirs: %zu\nData files: %zu"
+msgstr "Deployed to:\n%s\n\nFiles copied: %d\nResource dirs: %zu\nData files: %zu"
+
+msgid "\n\n[!] %d DLL(s) missing:"
+msgstr "\n\n[!] %d DLL(s) missing:"
+
+msgid "\n  ... and %d more"
+msgstr "\n  ... and %d more"
+
+msgid "\n[x] %d error(s) - check the log."
+msgstr "\n[x] %d error(s) - check the log."
+
+msgid "Deploy Complete"
+msgstr "Deploy Complete"
+
+msgid "Select deployment destination directory"
+msgstr "Select deployment destination directory"
+
+msgid "Deploying to: "
+msgstr "Deploying to: "
+
+msgid "Creating ZIP: "
+msgstr "Creating ZIP: "
+
+msgid "ZIP created:\n%s"
+msgstr "ZIP created:\n%s"
+
+msgid "ZIP creation failed.\n"
+msgstr "ZIP creation failed.\n"
+
+msgid "Using bundled NSIS: "
+msgstr "Using bundled NSIS: "
+
+msgid "Using system NSIS: "
+msgstr "Using system NSIS: "
+
+msgid "makensis.exe not found.\nBundled NSIS should be in nsis/ next to LibDeploy.exe."
+msgstr "makensis.exe not found.\nBundled NSIS should be in nsis/ next to LibDeploy.exe."
+
+msgid "NSIS Not Found"
+msgstr "NSIS Not Found"
+
+msgid "Generating installer: "
+msgstr "Generating installer: "
+
+msgid "Installer created:\n%s"
+msgstr "Installer created:\n%s"
+
+msgid "Generate Installer"
+msgstr "Generate Installer"
+
+msgid "Installer generation failed.\n"
+msgstr "Installer generation failed.\n"
+
+msgid "Path to windeployqt / linuxdeployqt (leave empty to auto-detect):"
+msgstr "Path to windeployqt / linuxdeployqt (leave empty to auto-detect):"
+
+msgid "Qt Deploy Tool"
+msgstr "Qt Deploy Tool"
+
+msgid "Running Qt deploy tool..."
+msgstr "Running Qt deploy tool..."
+
+msgid "Qt Deploy"
+msgstr "Qt Deploy"
+
+msgid "Qt Deploy complete. "
+msgstr "Qt Deploy complete. "
+
+msgid "Qt deploy tool finished. Tree refreshed."
+msgstr "Qt deploy tool finished. Tree refreshed."
+
+msgid "Qt deploy tool failed or was not found.\nCheck the log for details."
+msgstr "Qt deploy tool failed or was not found.\nCheck the log for details."
+
+msgid "  Status: "
+msgstr "  Status: "
+
+msgid "No analysis result."
+msgstr "No analysis result."
+
+msgid "Dependency Full Report\n"
+msgstr "Dependency Full Report\n"
+
+msgid "Target: "
+msgstr "Target: "
+
+msgid "Deploy: %zu  |  Maybe absent: %zu  |  Missing: %zu\n"
+msgstr "Deploy: %zu  |  Maybe absent: %zu  |  Missing: %zu\n"
+
+msgid "\n[!] MISSING (%zu) — not found in any search path:\n"
+msgstr "\n[!] MISSING (%zu) - not found in any search path:\n"
+
+msgid "\n[+] To Copy (%zu) — will be deployed:\n"
+msgstr "\n[+] To Copy (%zu) - will be deployed:\n"
+
+msgid "\n[~] Maybe Absent (%zu) — Redist, may need installer:\n"
+msgstr "\n[~] Maybe Absent (%zu) - Redist, may need installer:\n"
+
+msgid "\n[*] Redistributable packages required on target:\n"
+msgstr "\n[*] Redistributable packages required on target:\n"
+
+msgid "\n[d] Data Files (%zu) — non-DLL files from exe dir:\n"
+msgstr "\n[d] Data Files (%zu) - non-DLL files from exe dir:\n"
+
+msgid "\n[>] Resource Dirs (%zu) — will be deployed recursively:\n"
+msgstr "\n[>] Resource Dirs (%zu) - will be deployed recursively:\n"
+
+msgid "Full Dependency Report"
+msgstr "Full Dependency Report"
+
+msgid "Copy to Clipboard"
+msgstr "Copy to Clipboard"
+
+msgid "Close"
+msgstr "Close"
+
+msgid "&Theme"
+msgstr "&Theme"
+
+msgid "System"
+msgstr "System"
+
+msgid "Light"
+msgstr "Light"
+
+msgid "Dark"
+msgstr "Dark"
+
+msgid "Theme changed."
+msgstr "Theme changed."
+
+msgid "\n[!] Warnings (%zu):\n"
+msgstr "\n[!] Warnings (%zu):\n"

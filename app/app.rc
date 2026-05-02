@@ -1,0 +1,7 @@
+// Windows resource file for LibDeploy
+// Includes the wxWidgets manifest (Common Controls v6 / modern look)
+// and the application icon.
+
+IDI_APP_ICON ICON "../assets/libdeploy.ico"
+
+#include "wx/msw/wx.rc"
