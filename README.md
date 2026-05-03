@@ -51,11 +51,11 @@
 | ------------------------ | ------------------------------------------------------------ |
 | **Dependency analysis**  | Parses PE import tables and builds a dependency tree.        |
 | **DLL classification**   | Separates OS DLLs, third-party DLLs, redistributables, and ApiSet DLLs. |
-| **Resource packaging**   | Keeps folders such as `assets/`, `images/`, `scripts/`, `docs/`, `plugins/`, `packages/`, and `webview2_runtime/`. |
+| **Resource packaging**   | Keeps folders such as `assets/`, `images/`, `scripts/`, `docs/`, `plugins/`, `packages/`. |
 | **Deployment**           | Copies required files into a clean deployment directory.     |
 | **Packaging**            | Creates ZIP archives and NSIS installers.                    |
 | **Installer polish**     | Adds Start Menu and desktop shortcuts.                       |
-| **Compatibility checks** | Warns about WebView2 Runtime versions that are not compatible with Windows 7 / 8.1. |
+| **Compatibility checks** | Warns about not compatible Windows 7 / 8.1.  |
 | **UI**                   | Supports Chinese/English languages and light/dark/system themes. |
 
 ---
