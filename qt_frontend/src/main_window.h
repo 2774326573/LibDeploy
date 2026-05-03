@@ -6,9 +6,11 @@
 #include <QListWidget>
 #include <QMainWindow>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QTextEdit>
+#include <QTimer>
 #include <QTreeWidget>
 #include <QComboBox>
 #include <QGroupBox>
@@ -40,6 +42,20 @@ private:
         QStringList logs;
     };
 
+    struct ZipResult {
+        bool ok = false;
+        QString zipPath;
+        QStringList errors;
+        QStringList logs;
+    };
+
+    struct InstallerResult {
+        bool ok = false;
+        QString outPath;
+        QStringList errors;
+        QStringList logs;
+    };
+
     QLineEdit*      m_exePath = nullptr;
     QComboBox*      m_targetOs = nullptr;
     QTreeWidget*    m_tree = nullptr;
@@ -54,8 +70,11 @@ private:
     QLabel*         m_targetOsLabel = nullptr;
     QLabel*         m_tipLabel = nullptr;
     QLabel*         m_logLabel = nullptr;
+    QLabel*         m_noticeLabel = nullptr;
     QGroupBox*      m_detailGroup = nullptr;
     QGroupBox*      m_pathsGroup = nullptr;
+
+    QMenu*          m_recentMenu = nullptr;
 
     QPushButton*    m_browseButton = nullptr;
     QPushButton*    m_analyzeButton = nullptr;
@@ -74,11 +93,17 @@ private:
     bool      m_hasReport = false;
     QString   m_currentLanguage;
     QString   m_currentTheme;
+    QString   m_logDir;          // logs/ directory next to exe
+    QString   m_currentLogFile;  // log file path for current session
     std::unique_ptr<QTranslator> m_translator;
 
-    std::unique_ptr<QProgressDialog> m_progress;
-    QFutureWatcher<AnalyzeResult> m_analyzeWatcher;
-    QFutureWatcher<DeployResult>  m_deployWatcher;
+    QPointer<QProgressDialog>        m_progress;
+    std::uint64_t                    m_progressCookie = 0;
+    std::uint64_t                    m_noticeCookie = 0;
+    QFutureWatcher<AnalyzeResult>   m_analyzeWatcher;
+    QFutureWatcher<DeployResult>    m_deployWatcher;
+    QFutureWatcher<ZipResult>       m_zipWatcher;
+    QFutureWatcher<InstallerResult> m_installerWatcher;
 
     void buildMenus();
     void buildUi();
@@ -99,6 +124,8 @@ private:
     void generateInstaller();
     void runQtDeploy();
     void showReportDialog();
+    void exportLog();
+    void showHistoryLogs();
     void addSearchPath();
     void removeSearchPath();
     void moveSearchPath(int direction);
@@ -113,8 +140,13 @@ private:
     void updateDetails(QTreeWidgetItem* item);
     void updateRedistPanel();
     void refreshSearchPaths();
-    void setBusy(bool busy, const QString& title = {}, const QString& text = {});
+    void updateRecentMenu();
+    void pushRecentTarget(const QString& path);
+    void saveSessionLog();
+    QString logDir() const;
+    void setBusy(bool busy, const QString& title = {}, const QString& text = {}, int maxValue = 0);
     void appendLog(const QString& text);
+    void showNotice(const QString& text, bool isError = false, int timeoutMs = 8000);
 
     TargetOs selectedTargetOs() const;
     QString categoryText(DllCategory category) const;

@@ -47,16 +47,18 @@
 
 ## 核心功能
 
-| 功能模块       | 说明                                                         |
-| -------------- | ------------------------------------------------------------ |
-| **依赖分析**   | 解析 PE 导入表，构建完整依赖树。                             |
-| **DLL 分类**   | 区分系统 DLL、第三方 DLL、可再发行 DLL 和 ApiSet DLL。       |
-| **资源打包**   | 保留 `assets/`、`images/`、`scripts/`、`docs/`、`plugins/`、`packages/` 等文件夹。 |
-| **部署**       | 将所需文件复制到干净的部署目录。                             |
-| **打包**       | 生成 ZIP 压缩包和 NSIS 安装程序。                            |
-| **安装体验**   | 添加开始菜单和桌面快捷方式。                                 |
-| **兼容性检查** | 提示Windows 7 / 8.1 的兼容性问题。  |
-| **界面特性**   | 支持中/英文语言切换，以及亮色/暗色/跟随系统主题。            |
+- **依赖分析** — 解析 PE 导入表，通过 BFS 构建完整依赖树。
+- **DLL 分类** — 区分系统核心 DLL、网络 DLL、第三方 DLL、可再发行 DLL 和 ApiSet DLL。
+- **资源打包** — 保留 `assets/`、`images/`、`scripts/`、`docs/`、`plugins/`、`packages/`、`webview2_runtime/` 等文件夹。
+- **目录智能跳过** — 自动忽略构建输出目录（`bin/`、`Release/`、`Debug/`、`x64/`、`_deploy/` 等），避免污染部署结果。
+- **部署** — 将所需文件复制到干净的部署目录。
+- **ZIP 打包** — 生成 ZIP 压缩包，并实时显示逐文件压缩进度（0 → 100%）。
+- **NSIS 安装程序** — 生成含开始菜单和桌面快捷方式的 NSIS 安装程序。
+- **异步操作** — 所有耗时任务（分析、部署、ZIP、安装程序）均在后台线程运行，同时显示实时进度对话框，界面不卡顿。
+- **最近文件** — 文件菜单记录最近打开的 10 个可执行文件，一键重新打开。
+- **日志存档与历史** — 每次分析会话自动保存至 `logs/YYYY-MM-DD_HH-MM-SS_App.log`，可在应用内浏览和导出。
+- **兼容性检查** — 提示 WebView2 Runtime 版本与 Windows 7 / 8.1 的兼容性问题。
+- **界面特性** — 支持中/英文语言切换，以及亮色/暗色/跟随系统主题。
 
 ---
 
@@ -64,10 +66,10 @@
 
 LibDeploy 提供了两套桌面前端，共享同一个核心引擎。
 
-| 前端           | 路径           | 构建依赖                     | 备注                                    |
-| -------------- | -------------- | ---------------------------- | --------------------------------------- |
-| **wxWidgets**  | `app/`         | CMake + MinGW-w64            | wxWidgets 和运行库已打包在仓库中。      |
-| **Qt Widgets** | `qt_frontend/` | CMake + Qt SDK + MSVC 工具链 | 使用 `windeployqt` 自动复制 Qt 运行库。 |
+| 前端           | 路径           | 构建依赖                     | 备注                                          |
+| -------------- | -------------- | ---------------------------- | --------------------------------------------- |
+| **wxWidgets**  | `app/`         | CMake + MinGW-w64            | wxWidgets 和运行库已打包在仓库中。            |
+| **Qt Widgets** | `qt_frontend/` | CMake + Qt SDK + MSVC 工具链 | 使用 `windeployqt` 自动复制 Qt 运行库。       |
 
 **共享核心模块：**
 
@@ -133,6 +135,24 @@ cmake --build .\build_qt --config Release -j4
 **输出：** `build_qt/bin/Release/LibDeployQt.exe`
 
 > 💡 构建完成后，Qt 的 DLL、插件、MSVC 运行库、NSIS 工具、配置文件和翻译文件会自动复制到发布文件夹。**最终用户无需单独安装 Qt。**
+
+---
+
+## 使用方法
+
+1. **打开** — 点击"浏览"或使用"文件 → 打开可执行文件"选择 `.exe` 或 `.dll`。
+2. **分析** — 点击"分析"。后台线程解析完整依赖树，进度对话框实时显示状态。
+3. **查看** — 在依赖树中查看各分类（已找到 / 缺失 / 系统 / 可再发行），右侧面板显示详细信息。
+4. **部署** — 点击"部署"，将所有所需文件复制到指定目录。
+5. **打包** — 使用"打包 ZIP"或"生成安装程序"创建可分发的压缩包或 NSIS 安装程序。
+
+**使用提示：**
+
+- 如果 DLL 不在可执行文件旁边，可在"搜索路径"中添加额外的搜索目录。
+- 启用"跟随系统 PATH"可在分析时搜索系统 `PATH` 变量。
+- 只有看起来像应用资源的目录会被复制；`bin/`、`build/`、`Debug/`、`Release/`、`x64/`、`x86/` 等常见构建输出目录会自动跳过。
+- 使用"文件 → 最近文件"快速重新打开之前分析过的目标。
+- 打开"文件 → 历史日志"可浏览或导出任意历史分析会话日志。
 
 ---
 
@@ -246,18 +266,18 @@ flowchart TD
 ```mermaid
 flowchart LR
     Input[目标 EXE/DLL] --> PE[PE 导入表解析器]
-    PE --> Tree[构建依赖树]
+    PE --> Tree[构建依赖树<br/>BFS]
     Tree --> Classify[DLL 分类]
-    Classify --> OS[系统 DLL]
+    Classify --> OS[系统/网络 DLL]
     Classify --> ThirdParty[第三方 DLL]
     Classify --> Redist[可再发行 DLL]
     Classify --> ApiSet[ApiSet DLL]
-    
+
     ThirdParty --> Copy[复制到部署目录]
     Redist --> Copy
     OS --> Ignore[忽略]
     ApiSet --> Ignore
-    
+
     Copy --> Resources[收集资源文件夹<br/>assets, images, scripts, ...]
     Resources --> Package[生成 ZIP / NSIS]
 ```
@@ -266,7 +286,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    Start[发现 DLL] --> IsKnownOS{是否在系统白名单？}
+    Start[发现 DLL] --> IsKnownOS{是否在系统/网络白名单？}
     IsKnownOS -->|是| OS[标记为系统 DLL<br/>不部署]
     IsKnownOS -->|否| IsThirdParty{是否在第三方列表？}
     IsThirdParty -->|是| ThirdParty[标记为第三方 DLL<br/>部署]
@@ -275,6 +295,16 @@ flowchart TD
     IsRedist -->|否| IsApiSet{是否为 ApiSet DLL？}
     IsApiSet -->|是| ApiSet[标记为 ApiSet<br/>不部署]
     IsApiSet -->|否| Unknown[标记为未知<br/>警告用户]
+```
+
+### 异步操作流程
+
+```mermaid
+flowchart LR
+    UI[用户操作] --> BG[后台线程]
+    BG -->|进度回调| PD[进度对话框]
+    BG -->|完成| Main[主线程]
+    Main --> Result[更新树视图 / 日志 / 状态]
 ```
 
 ### 构建流程对比（wxWidgets vs Qt）

@@ -41,6 +41,11 @@ build/bin/
 
 直接将 `build/bin/` 目录整体复制到目标机器即可运行，无需安装任何依赖。
 
+> 使用 LibDeploy 分析和部署程序时，自动资源目录扫描会跳过常见构建输出目录，
+> 例如 `bin/`、`build/`、`Debug/`、`Release/`、`RelWithDebInfo/`、
+> `MinSizeRel/`、`x64/`、`x86/`、`Win32/`、`Win64/` 和 `*_deploy/`。
+> 这些目录不会被当作应用资源复制到部署目录、ZIP 或安装包中。
+
 ## Qt 前端构建
 
 Qt 版前端位于 `qt_frontend/`，复用同一套 `engine/`、`config/`、`third_party/`

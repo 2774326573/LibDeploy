@@ -84,6 +84,20 @@ AppConfig ConfigManager::Load(const std::string& path) {
 
         if (j.contains("qt_deploy_tool"))
             cfg.qt_deploy_tool = j["qt_deploy_tool"].get<std::string>();
+        if (j.contains("recent_targets")) {
+            for (auto& item : j["recent_targets"]) {
+                AppConfig::RecentTarget rt;
+                if (item.is_string()) {
+                    rt.path = item.get<std::string>();
+                } else if (item.is_object()) {
+                    rt.path = item.value("path", "");
+                    if (item.contains("search_paths"))
+                        rt.search_paths = item["search_paths"].get<std::vector<std::string>>();
+                }
+                if (!rt.path.empty())
+                    cfg.recent_targets.push_back(std::move(rt));
+            }
+        }
     } catch (...) {}
 
     return cfg;
@@ -105,7 +119,13 @@ bool ConfigManager::Save(const AppConfig& cfg, const std::string& path) {
         j["nsis"]["makensis_path"]   = cfg.makensis_path;
         j["nsis"]["redist_cache_dir"]= cfg.redist_cache_dir;
 
-        j["qt_deploy_tool"] = cfg.qt_deploy_tool;
+        j["qt_deploy_tool"]   = cfg.qt_deploy_tool;
+        {
+            json arr = json::array();
+            for (const auto& rt : cfg.recent_targets)
+                arr.push_back({{"path", rt.path}, {"search_paths", rt.search_paths}});
+            j["recent_targets"] = arr;
+        }
 
         j["classifier"]["extra_os_core"]  = cfg.extra_os_core;
         j["classifier"]["user_excluded"]  = cfg.user_excluded;

@@ -16,6 +16,13 @@ struct AppConfig {
     std::string ui_language = ""; // "" = auto-detect from system, "en_US", "zh_CN"
     std::string ui_theme = "system"; // "system", "light", "dark"
 
+    struct RecentTarget {
+        std::string path;
+        std::vector<std::string> search_paths;
+    };
+    std::vector<RecentTarget> recent_targets; // recently analyzed exe paths + their search paths, max 10
+    static constexpr int kMaxRecentTargets = 10;
+
     // User-defined extra classification rules
     std::vector<std::string> extra_os_core;
     struct RedistRule { std::string prefix; std::string package; bool always_deploy; };

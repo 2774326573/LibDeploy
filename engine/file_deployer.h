@@ -37,8 +37,7 @@ public:
                              std::vector<std::string>& errors,
                              ProgressCallback on_progress = nullptr);
 
-private:
-    // 收集所有需要打包的文件（exe + DLL）
+    // 收集所有需要打包的文件（exe + DLL），供外部预统计文件数量
     static std::vector<std::string> CollectFiles(const DepReport& report,
                                                   const Options& opts);
 };

@@ -29,6 +29,8 @@ private:
     AppConfig  m_cfg;
     DepReport  m_report;
     bool       m_has_report = false;
+    std::string m_log_dir;          // logs/ directory
+    std::string m_current_log_file; // current session log path
 
     // Tree image list indices
     int m_img_found   = -1;
@@ -59,6 +61,8 @@ private:
     void OnMoveDown(wxCommandEvent&);
     void OnTreeSelChanged(wxTreeEvent&);
     void OnClose(wxCloseEvent&);
+    void OnExportLog(wxCommandEvent&);
+    void OnHistoryLogs(wxCommandEvent&);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     void PopulateTree(const DepReport& report);
@@ -78,10 +82,20 @@ private:
     void SwitchLanguage(const std::string& lang_code);
     void SwitchTheme(const std::string& theme);
     void ApplyTheme();
+    void PushRecentTarget(const std::string& path);
+    void UpdateRecentMenu();
+    void SaveSessionLog();
+    wxMenu* m_recent_menu = nullptr;
     // 异步分析：后台线程执行 Resolve + DirScan，主线程更新进度条
     void RunAnalyzeAsync(const wxString& path);
     // 异步部署：后台线程执行复制，主线程更新进度条
     void RunDeployAsync(const std::string& dest_dir);
+    // 异步打包 ZIP
+    void RunPackZipAsync(const std::string& zip_path);
+    // 异步生成安装程序
+    void RunGenInstallerAsync(const std::string& out_path,
+                              const std::string& app_name,
+                              const std::string& makensis_path);
 
     wxDECLARE_EVENT_TABLE();
 };

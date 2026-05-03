@@ -371,3 +371,48 @@ msgstr "Theme changed."
 
 msgid "\n[!] Warnings (%zu):\n"
 msgstr "\n[!] Warnings (%zu):\n"
+
+# Recent files menu
+msgid "Recent Files"
+msgstr "Recent Files"
+
+msgid "&Export Log..."
+msgstr "&Export Log..."
+
+msgid "&History Logs..."
+msgstr "&History Logs..."
+
+msgid "(empty)"
+msgstr "(empty)"
+
+msgid "Clear Recent"
+msgstr "Clear Recent"
+
+# Export log
+msgid "Export Log"
+msgstr "Export Log"
+
+msgid "Log files (*.log)|*.log|Text files (*.txt)|*.txt|All files|*.*"
+msgstr "Log files (*.log)|*.log|Text files (*.txt)|*.txt|All files|*.*"
+
+msgid "Log saved to:\n%s"
+msgstr "Log saved to:\n%s"
+
+msgid "Cannot write file."
+msgstr "Cannot write file."
+
+# History logs dialog
+msgid "History Logs"
+msgstr "History Logs"
+
+msgid "Open Folder"
+msgstr "Open Folder"
+
+msgid "Delete"
+msgstr "Delete"
+
+msgid "Delete %s?"
+msgstr "Delete %s?"
+
+msgid "Delete Log"
+msgstr "Delete Log"

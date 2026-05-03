@@ -23,6 +23,8 @@ void DllClassifier::InitBuiltinRules()
         "urlmon.dll", "wininet.dll", "shlwapi.dll",
         // msvcrt.dll是系统文件但已废弃，不建议依赖，仍列入OsCore
         "msvcrt.dll",
+        // 网络
+        "mpr.dll", "winhttp.dll", "wldap32.dll", "dnsapi.dll",
         // 无障碍 / 输入法 / UI框架
         "oleacc.dll", "msctf.dll", "usp10.dll",
         // DirectX 核心（Win7+ 均内置；d3dcompiler_47 不在此列，由 Redist 规则覆盖）

@@ -31,6 +31,44 @@ static bool IsWindowsSystemPath(const std::string& path)
     return p.size() >= w.size() && p.substr(0, w.size()) == w;
 }
 
+static bool SameFileOrPath(const fs::path& a, const fs::path& b)
+{
+    std::error_code ec;
+    if (fs::exists(a, ec) && fs::exists(b, ec) && fs::equivalent(a, b, ec))
+        return true;
+
+    fs::path aa = a.lexically_normal();
+    fs::path bb = b.lexically_normal();
+    return ToLower(aa.string()) == ToLower(bb.string());
+}
+
+static bool IsGeneratedPackageArtifact(const fs::path& file,
+                                       const DepReport& report,
+                                       const fs::path& current_output)
+{
+    if (SameFileOrPath(file, current_output))
+        return true;
+
+    fs::path target = report.target_exe;
+    std::error_code ec;
+    if (!target.empty() && fs::exists(file.parent_path(), ec) &&
+        fs::exists(target.parent_path(), ec) &&
+        fs::equivalent(file.parent_path(), target.parent_path(), ec))
+    {
+        std::string stem = ToLower(target.stem().string());
+        std::string name = ToLower(file.filename().string());
+        std::string ext = ToLower(file.extension().string());
+        if (name == stem + ".zip" || name == stem + "_setup.exe")
+            return true;
+        if (ext == ".zip" && name.rfind(stem + "_", 0) == 0)
+            return true;
+        if (ext == ".exe" && name.rfind(stem + "_setup_", 0) == 0)
+            return true;
+    }
+
+    return false;
+}
+
 #ifdef _WIN32
 // 直接用 CreateProcessW 运行子进程，捕获 stdout+stderr，避免 cmd.exe 经由的引号问题
 static int RunProcessCapture(const std::wstring& exe_w,
@@ -296,50 +334,70 @@ bool FileDeployer::PackZip(const DepReport& report,
         return false;
     }
 
+    fs::path output_path = fs::path(zip_path);
+    std::vector<std::string> data_files;
+    data_files.reserve(report.data_files.size());
+    for (const auto& df : report.data_files) {
+        if (IsGeneratedPackageArtifact(fs::path(df), report, output_path))
+            continue;
+        data_files.push_back(df);
+    }
+
     zipFile zf = zipOpen64(zip_path.c_str(), APPEND_STATUS_CREATE);
     if (!zf) {
         errors.push_back("Cannot create ZIP file: " + zip_path);
         return false;
     }
 
-    int total = (int)files.size();
+    // ── 预先统计所有条目数，用于统一计算进度百分比 ─────────────────────────────
+    int total = (int)files.size() + (int)data_files.size();
+    for (const auto& rd : report.resource_dirs) {
+        std::error_code ec_cnt;
+        for (const auto& e : fs::recursive_directory_iterator(rd.src_path, ec_cnt))
+            if (e.is_regular_file()) ++total;
+    }
+    int done   = 0;
     int packed = 0;
-    for (int i = 0; i < total; ++i) {
-        const std::string& src_path = files[i];
-        std::string filename = fs::path(src_path).filename().string();
 
+    auto report_progress = [&](const std::string& label) {
         if (on_progress)
-            on_progress("Packing " + filename, (i * 100) / total);
+            on_progress(label, total > 0 ? (done * 100 / total) : 0);
+    };
+
+    // ── 打包 exe / DLL 文件 ───────────────────────────────────────────────────
+    for (const auto& src_path : files) {
+        std::string filename = fs::path(src_path).filename().string();
+        report_progress("Packing " + filename);
 
         zip_fileinfo zi{};
         int err = zipOpenNewFileInZip(zf, filename.c_str(), &zi,
                                       nullptr, 0, nullptr, 0, nullptr,
                                       Z_DEFLATED, Z_DEFAULT_COMPRESSION);
+        ++done;
         if (err != ZIP_OK) {
             errors.push_back("Cannot add entry: " + filename);
             continue;
         }
-
         std::ifstream f(src_path, std::ios::binary);
         if (!f) {
             errors.push_back("Cannot open: " + src_path);
             zipCloseFileInZip(zf);
             continue;
         }
-
         char buf[65536];
-        while (f.read(buf, sizeof(buf)) || f.gcount() > 0) {
+        while (f.read(buf, sizeof(buf)) || f.gcount() > 0)
             zipWriteInFileInZip(zf, buf, (unsigned int)f.gcount());
-        }
         zipCloseFileInZip(zf);
         ++packed;
     }
 
     // ── 打包数据文件 ──────────────────────────────────────────────────────────
-    for (const auto& df : report.data_files) {
+    for (const auto& df : data_files) {
         std::string filename = fs::path(df).filename().string();
-        if (on_progress) on_progress("Packing " + filename, 88);
+        report_progress("Packing " + filename);
+
         zip_fileinfo zi_d{};
+        ++done;
         if (zipOpenNewFileInZip(zf, filename.c_str(), &zi_d,
                                 nullptr, 0, nullptr, 0, nullptr,
                                 Z_DEFLATED, Z_DEFAULT_COMPRESSION) != ZIP_OK)
@@ -352,17 +410,18 @@ bool FileDeployer::PackZip(const DepReport& report,
         ++packed;
     }
 
-    // ── 打包资源子目录 ────────────────────────────────────────────────────────
-    std::function<void(const fs::path&, const std::string&)> pack_dir =
-        [&](const fs::path& src_dir, const std::string& zip_prefix)
+    // ── 打包资源子目录（每个文件单独上报进度）────────────────────────────────
+    std::function<void(const fs::path&)> pack_dir =
+        [&](const fs::path& src_dir)
     {
         std::error_code ec;
         for (const auto& entry : fs::recursive_directory_iterator(src_dir, ec)) {
             if (!entry.is_regular_file()) continue;
-            // zip 内路径：dir_name/sub/file.ext（与 Deploy 保持一致）
             fs::path rel = fs::relative(entry.path(), src_dir.parent_path(), ec);
             std::string zip_entry = rel.generic_string();
+            report_progress("Packing " + zip_entry);
             zip_fileinfo zi2{};
+            ++done;
             if (zipOpenNewFileInZip(zf, zip_entry.c_str(), &zi2,
                                     nullptr, 0, nullptr, 0, nullptr,
                                     Z_DEFLATED, Z_DEFAULT_COMPRESSION) != ZIP_OK)
@@ -375,10 +434,8 @@ bool FileDeployer::PackZip(const DepReport& report,
             ++packed;
         }
     };
-    for (const auto& rd : report.resource_dirs) {
-        if (on_progress) on_progress("Packing dir " + rd.dir_name, 90);
-        pack_dir(fs::path(rd.src_path), rd.dir_name);
-    }
+    for (const auto& rd : report.resource_dirs)
+        pack_dir(fs::path(rd.src_path));
 
     zipClose(zf, "Created by LibDeploy");
     if (on_progress) on_progress("Done", 100);
@@ -405,6 +462,15 @@ bool FileDeployer::GenInstaller(const DepReport& report,
     if (files.empty()) {
         errors.push_back("No files to package.");
         return false;
+    }
+
+    fs::path installer_output = fs::path(output_exe);
+    std::vector<std::string> data_files;
+    data_files.reserve(report.data_files.size());
+    for (const auto& df : report.data_files) {
+        if (IsGeneratedPackageArtifact(fs::path(df), report, installer_output))
+            continue;
+        data_files.push_back(df);
     }
 
     std::string exe_name = fs::path(report.target_exe).filename().string();
@@ -498,7 +564,7 @@ bool FileDeployer::GenInstaller(const DepReport& report,
     }
 
     // 数据文件（.pth/.zip/.db/.lic 等非 DLL 文件）
-    for (const auto& df : report.data_files) {
+    for (const auto& df : data_files) {
         std::error_code ec_ex;
         if (!fs::exists(fs::path(df), ec_ex)) continue;
         nsi << "    File \"" << to_nsis_path(fs::path(df)) << "\"\n";
@@ -553,7 +619,7 @@ bool FileDeployer::GenInstaller(const DepReport& report,
     nsi << "    Delete \"$INSTDIR\\Uninstall.exe\"\n";
     for (const auto& f : files)
         nsi << "    Delete \"$INSTDIR\\" << fs::path(f).filename().string() << "\"\n";
-    for (const auto& df : report.data_files)
+    for (const auto& df : data_files)
         nsi << "    Delete \"$INSTDIR\\" << fs::path(df).filename().string() << "\"\n";
     // 卸载附加资源目录（从最深层开始）
     for (auto it = extra_rel_dirs.rbegin(); it != extra_rel_dirs.rend(); ++it)

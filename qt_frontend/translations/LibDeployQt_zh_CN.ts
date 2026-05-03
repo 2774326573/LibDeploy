@@ -469,5 +469,69 @@ Bundled NSIS should be in nsis/ next to LibDeployQt.exe.</source>
         <source>Warnings</source>
         <translation>警告</translation>
     </message>
+    <message>
+        <source>Recent Files</source>
+        <translation>最近文件</translation>
+    </message>
+    <message>
+        <source>&amp;Export Log...</source>
+        <translation>导出日志(&amp;E)...</translation>
+    </message>
+    <message>
+        <source>&amp;History Logs...</source>
+        <translation>历史日志(&amp;H)...</translation>
+    </message>
+    <message>
+        <source>(empty)</source>
+        <translation>(空)</translation>
+    </message>
+    <message>
+        <source>Clear Recent</source>
+        <translation>清除最近记录</translation>
+    </message>
+    <message>
+        <source>Export Log</source>
+        <translation>导出日志</translation>
+    </message>
+    <message>
+        <source>Log files (*.log);;Text files (*.txt);;All files (*.*)</source>
+        <translation>日志文件 (*.log);;文本文件 (*.txt);;所有文件 (*.*)</translation>
+    </message>
+    <message>
+        <source>Log saved to:
+%1</source>
+        <translation>日志已保存至:
+%1</translation>
+    </message>
+    <message>
+        <source>Cannot write file:
+%1</source>
+        <translation>无法写入文件:
+%1</translation>
+    </message>
+    <message>
+        <source>History Logs</source>
+        <translation>历史日志</translation>
+    </message>
+    <message>
+        <source>Open in Explorer</source>
+        <translation>在资源管理器中打开</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <source>Delete Log</source>
+        <translation>删除日志</translation>
+    </message>
+    <message>
+        <source>Delete %1?</source>
+        <translation>确定删除 %1？</translation>
+    </message>
+    <message>
+        <source>Packing ZIP: </source>
+        <translation>正在打包 ZIP: </translation>
+    </message>
 </context>
 </TS>

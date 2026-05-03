@@ -371,3 +371,48 @@ msgstr "主题已切换。"
 
 msgid "\n[!] Warnings (%zu):\n"
 msgstr "\n[!] 警告 (%zu):\n"
+
+# 最近文件菜单
+msgid "Recent Files"
+msgstr "最近文件"
+
+msgid "&Export Log..."
+msgstr "导出日志(&E)..."
+
+msgid "&History Logs..."
+msgstr "历史日志(&H)..."
+
+msgid "(empty)"
+msgstr "(空)"
+
+msgid "Clear Recent"
+msgstr "清除最近记录"
+
+# 导出日志
+msgid "Export Log"
+msgstr "导出日志"
+
+msgid "Log files (*.log)|*.log|Text files (*.txt)|*.txt|All files|*.*"
+msgstr "日志文件 (*.log)|*.log|文本文件 (*.txt)|*.txt|所有文件|*.*"
+
+msgid "Log saved to:\n%s"
+msgstr "日志已保存至:\n%s"
+
+msgid "Cannot write file."
+msgstr "无法写入文件。"
+
+# 历史日志对话框
+msgid "History Logs"
+msgstr "历史日志"
+
+msgid "Open Folder"
+msgstr "打开文件夹"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Delete %s?"
+msgstr "确定删除 %s？"
+
+msgid "Delete Log"
+msgstr "删除日志"

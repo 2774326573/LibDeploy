@@ -33,6 +33,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <sstream>
 
 namespace fs = std::filesystem;
@@ -45,6 +46,19 @@ QString appDir()
     return QFileInfo(QCoreApplication::applicationFilePath()).absolutePath();
 }
 
+QString runtimeConfigPath()
+{
+    const QString configRoot = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    if (configRoot.isEmpty())
+        return appDir() + "/libdeploy_config.json";
+    return QDir(configRoot).absoluteFilePath("libdeploy_config.json");
+}
+
+QString bundledConfigPath()
+{
+    return appDir() + "/libdeploy_config.json";
+}
+
 QString defaultDeployDir(const QString& exePath)
 {
     QFileInfo info(exePath);
@@ -55,6 +69,9 @@ QString defaultDeployDir(const QString& exePath)
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
+    m_logDir = appDir() + "/logs";
+    QDir().mkpath(m_logDir);
+
     loadConfig();
     initializeLanguage();
     initializeTheme();
@@ -79,6 +96,7 @@ MainWindow::MainWindow(QWidget* parent)
             .arg(m_report.maybe_absent.size());
         statusBar()->showMessage(status);
         appendLog(tr("Done. ") + status);
+        saveSessionLog();
         setBusy(false);
     });
 
@@ -92,13 +110,50 @@ MainWindow::MainWindow(QWidget* parent)
             .arg(result.copied)
             .arg(m_report.resource_dirs.size())
             .arg(m_report.data_files.size());
-        if (!m_report.missing.empty()) {
+        if (!m_report.missing.empty())
             summary += tr("\n\nMissing DLLs: %1").arg(m_report.missing.size());
-        }
-        if (!result.errors.empty()) {
+        if (!result.errors.empty())
             summary += tr("\nErrors: %1 - check the log.").arg(result.errors.size());
+        statusBar()->showMessage(tr("Deploy complete."), 10000);
+        showNotice(tr("Deploy complete. Files copied: %1").arg(result.copied),
+                   !result.errors.empty());
+        appendLog(summary);
+    });
+
+    connect(&m_zipWatcher, &QFutureWatcher<ZipResult>::finished, this, [this]() {
+        ZipResult result = m_zipWatcher.result();
+        for (const QString& line : result.logs) appendLog(line);
+        for (const QString& err : result.errors) appendLog(tr("ERROR: ") + err);
+        setBusy(false);
+        if (result.ok) {
+            const QString message = tr("ZIP created: %1").arg(result.zipPath);
+            statusBar()->showMessage(message, 15000);
+            showNotice(message);
+            appendLog(message);
+        } else {
+            const QString message = tr("ZIP creation failed.");
+            statusBar()->showMessage(message, 15000);
+            showNotice(message, true);
+            appendLog(message);
         }
-        QMessageBox::information(this, tr("Deploy Complete"), summary);
+    });
+
+    connect(&m_installerWatcher, &QFutureWatcher<InstallerResult>::finished, this, [this]() {
+        InstallerResult result = m_installerWatcher.result();
+        for (const QString& line : result.logs) appendLog(line);
+        for (const QString& err : result.errors) appendLog(tr("ERROR: ") + err);
+        setBusy(false);
+        if (result.ok) {
+            const QString message = tr("Installer created: %1").arg(result.outPath);
+            statusBar()->showMessage(message, 15000);
+            showNotice(message);
+            appendLog(message);
+        } else {
+            const QString message = tr("Installer generation failed.");
+            statusBar()->showMessage(message, 15000);
+            showNotice(message, true);
+            appendLog(message);
+        }
     });
 }
 
@@ -108,6 +163,12 @@ void MainWindow::buildMenus()
     QMenu* file = menuBar()->addMenu(tr("&File"));
     file->addAction(tr("&Open EXE...\tCtrl+O"), this, &MainWindow::openExecutable, QKeySequence::Open);
     file->addAction(tr("&Analyze\tF5"), this, &MainWindow::analyze, Qt::Key_F5);
+    file->addSeparator();
+    m_recentMenu = file->addMenu(tr("Recent Files"));
+    updateRecentMenu();
+    file->addSeparator();
+    file->addAction(tr("&Export Log..."), this, &MainWindow::exportLog);
+    file->addAction(tr("&History Logs..."), this, &MainWindow::showHistoryLogs);
     file->addSeparator();
     file->addAction(tr("E&xit"), this, &QWidget::close);
 
@@ -266,6 +327,11 @@ void MainWindow::buildUi()
     splitter->setStretchFactor(1, 2);
     root->addWidget(splitter, 1);
 
+    m_noticeLabel = new QLabel;
+    m_noticeLabel->setWordWrap(true);
+    m_noticeLabel->hide();
+    root->addWidget(m_noticeLabel);
+
     m_logLabel = new QLabel;
     root->addWidget(m_logLabel);
     m_log = new QPlainTextEdit;
@@ -279,12 +345,20 @@ void MainWindow::buildUi()
 
 void MainWindow::loadConfig()
 {
-    m_config = ConfigManager::Load();
+    const QString userConfig = runtimeConfigPath();
+    if (QFileInfo::exists(userConfig)) {
+        m_config = ConfigManager::Load(str(userConfig));
+        return;
+    }
+
+    m_config = ConfigManager::Load(str(bundledConfigPath()));
 }
 
 void MainWindow::saveConfig()
 {
-    ConfigManager::Save(m_config);
+    const QString userConfig = runtimeConfigPath();
+    QDir().mkpath(QFileInfo(userConfig).absolutePath());
+    ConfigManager::Save(m_config, str(userConfig));
 }
 
 void MainWindow::initializeLanguage()
@@ -447,6 +521,7 @@ void MainWindow::openExecutable()
     if (path.isEmpty()) return;
     m_exePath->setText(path);
     m_config.last_target = str(path);
+    pushRecentTarget(path);
     saveConfig();
 }
 
@@ -465,7 +540,15 @@ void MainWindow::startAnalyze(bool runQtDeployTool)
 
     m_config.last_target = str(path);
     m_config.target_os = selectedTargetOs();
+    pushRecentTarget(path);
     saveConfig();
+    m_hasReport = false;
+    m_report = DepReport{};
+    // 新建当次会话日志文件名：logs/YYYY-MM-DD_HH-MM-SS_ExeName.log
+    QString exeName = QFileInfo(path).completeBaseName();
+    m_currentLogFile = m_logDir + "/" +
+        QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss") +
+        "_" + exeName + ".log";
     m_tree->clear();
     m_redistPanel->hide();
     appendLog(tr("Analyzing: ") + path);
@@ -500,8 +583,8 @@ void MainWindow::startAnalyze(bool runQtDeployTool)
 void MainWindow::deployToDefault()
 {
     if (!m_hasReport) {
-        startAnalyze(false);
-        if (!m_hasReport) return;
+        QMessageBox::warning(this, tr("LibDeployQt"), tr("Run Analyze first."));
+        return;
     }
     startDeploy(defaultDeployDir(qstr(m_report.target_exe)));
 }
@@ -547,15 +630,37 @@ void MainWindow::packZip()
         return;
     }
     QFileInfo exe(qstr(m_report.target_exe));
-    QString zipPath = exe.absoluteDir().absoluteFilePath(exe.completeBaseName() + ".zip");
-    FileDeployer::Options opts;
-    opts.copy_redist_dlls = true;
-    std::vector<std::string> errors;
-    bool ok = FileDeployer::PackZip(m_report, str(zipPath), opts, errors,
-        [this](const std::string& msg, int) { appendLog(qstr(msg)); });
-    for (const auto& e : errors) appendLog(tr("ERROR: ") + qstr(e));
-    if (ok) QMessageBox::information(this, tr("Pack ZIP"), tr("ZIP created:\n%1").arg(zipPath));
-    else QMessageBox::critical(this, tr("Pack ZIP"), tr("ZIP creation failed."));
+    QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+    QString zipPath = exe.absoluteDir().absoluteFilePath(
+        exe.completeBaseName() + "_" + stamp + ".zip");
+    appendLog(tr("Packing ZIP: ") + zipPath);
+    setBusy(true, tr("Packing ZIP"), tr("Collecting files..."), 100);
+
+    DepReport report = m_report;
+    const std::uint64_t progressCookie = m_progressCookie;
+    m_zipWatcher.setFuture(QtConcurrent::run([report, zipPath, this, progressCookie]() {
+        ZipResult result;
+        result.zipPath = zipPath;
+        FileDeployer::Options opts;
+        opts.copy_redist_dlls = true;
+        std::vector<std::string> errors;
+        int lastPct = -1;
+        result.ok = FileDeployer::PackZip(report, str(zipPath), opts, errors,
+            [&result, this, &lastPct, progressCookie](const std::string& msg, int pct) {
+                if (pct == lastPct && pct < 100)
+                    return;
+                lastPct = pct;
+                result.logs.push_back(qstr(msg));
+                QMetaObject::invokeMethod(this, [this, msg, pct, progressCookie]() {
+                    if (progressCookie == m_progressCookie && m_progress) {
+                        m_progress->setValue(pct);
+                        m_progress->setLabelText(QString::fromUtf8(msg.c_str()));
+                    }
+                }, Qt::QueuedConnection);
+            });
+        for (const auto& e : errors) result.errors.push_back(qstr(e));
+        return result;
+    }));
 }
 
 void MainWindow::generateInstaller()
@@ -575,18 +680,27 @@ void MainWindow::generateInstaller()
 
     QFileInfo exe(qstr(m_report.target_exe));
     QString appName = exe.completeBaseName();
-    QString out = exe.absoluteDir().absoluteFilePath(appName + "_Setup.exe");
+    QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+    QString out = exe.absoluteDir().absoluteFilePath(appName + "_Setup_" + stamp + ".exe");
     appendLog(tr("Generating installer: ") + out);
+    setBusy(true, tr("Generating Installer"), tr("Running NSIS..."));
 
-    FileDeployer::Options opts;
-    opts.copy_redist_dlls = m_config.copy_redist_dlls;
-    opts.bundle_redist_installer = m_config.bundle_redist_installer;
-    std::vector<std::string> errors;
-    bool ok = FileDeployer::GenInstaller(m_report, str(out), str(appName), str(nsis), opts, errors,
-        [this](const std::string& msg, int) { appendLog(qstr(msg)); });
-    for (const auto& e : errors) appendLog(tr("ERROR: ") + qstr(e));
-    if (ok) QMessageBox::information(this, tr("Generate Installer"), tr("Installer created:\n%1").arg(out));
-    else QMessageBox::critical(this, tr("Generate Installer"), tr("Installer generation failed."));
+    DepReport report = m_report;
+    AppConfig cfg = m_config;
+    m_installerWatcher.setFuture(QtConcurrent::run([report, cfg, out, appName, nsis]() {
+        InstallerResult result;
+        result.outPath = out;
+        FileDeployer::Options opts;
+        opts.copy_redist_dlls = cfg.copy_redist_dlls;
+        opts.bundle_redist_installer = cfg.bundle_redist_installer;
+        std::vector<std::string> errors;
+        result.ok = FileDeployer::GenInstaller(report, str(out), str(appName), str(nsis), opts, errors,
+            [&result](const std::string& msg, int) {
+                result.logs.push_back(qstr(msg));
+            });
+        for (const auto& e : errors) result.errors.push_back(qstr(e));
+        return result;
+    }));
 }
 
 void MainWindow::runQtDeploy()
@@ -630,7 +744,12 @@ void MainWindow::showReportDialog()
 
 void MainWindow::addSearchPath()
 {
-    QString path = QFileDialog::getExistingDirectory(this, tr("Select search path"));
+    QString startDir;
+    if (!m_config.search_paths.empty())
+        startDir = qstr(m_config.search_paths.back());
+    else if (!m_config.last_target.empty())
+        startDir = QFileInfo(qstr(m_config.last_target)).absoluteDir().absolutePath();
+    QString path = QFileDialog::getExistingDirectory(this, tr("Select search path"), startDir);
     if (path.isEmpty()) return;
     m_config.search_paths.push_back(str(path));
     refreshSearchPaths();
@@ -726,7 +845,7 @@ void MainWindow::refreshSearchPaths()
     for (const auto& p : m_config.search_paths) m_searchPaths->addItem(qstr(p));
 }
 
-void MainWindow::setBusy(bool busy, const QString& title, const QString& text)
+void MainWindow::setBusy(bool busy, const QString& title, const QString& text, int maxValue)
 {
     const QList<QWidget*> controls = {
         m_analyzeButton, m_deployButton, m_reportButton, m_copyButton, m_zipButton, m_installerButton
@@ -734,15 +853,20 @@ void MainWindow::setBusy(bool busy, const QString& title, const QString& text)
     for (QWidget* w : controls) if (w) w->setEnabled(!busy);
 
     if (busy) {
-        m_progress = std::make_unique<QProgressDialog>(text, QString(), 0, 0, this);
+        ++m_progressCookie;
+        if (!m_progress)
+            m_progress = new QProgressDialog(text, QString(), 0, maxValue, this);
+        m_progress->setLabelText(text);
+        m_progress->setRange(0, maxValue);
+        m_progress->setValue(0);
         m_progress->setWindowTitle(title);
         m_progress->setWindowModality(Qt::ApplicationModal);
         m_progress->setCancelButton(nullptr);
         m_progress->show();
     } else {
+        ++m_progressCookie;
         if (m_progress) {
-            m_progress->close();
-            m_progress.reset();
+            m_progress->hide();
         }
     }
 }
@@ -750,6 +874,35 @@ void MainWindow::setBusy(bool busy, const QString& title, const QString& text)
 void MainWindow::appendLog(const QString& text)
 {
     m_log->appendPlainText("[" + QTime::currentTime().toString("HH:mm:ss") + "] " + text);
+}
+
+void MainWindow::showNotice(const QString& text, bool isError, int timeoutMs)
+{
+    if (!m_noticeLabel) return;
+
+    ++m_noticeCookie;
+    const std::uint64_t cookie = m_noticeCookie;
+
+    QString style;
+    if (isError) {
+        style = (m_currentTheme == "dark")
+            ? "QLabel { background: #4b1f24; color: #ffd7dc; border: 1px solid #8f3a45; border-radius: 6px; padding: 8px 10px; }"
+            : "QLabel { background: #fff1f2; color: #8a1c2a; border: 1px solid #e7a8b0; border-radius: 6px; padding: 8px 10px; }";
+    } else {
+        style = (m_currentTheme == "dark")
+            ? "QLabel { background: #183247; color: #d7f0ff; border: 1px solid #3f6c8b; border-radius: 6px; padding: 8px 10px; }"
+            : "QLabel { background: #eef7ff; color: #0f4c81; border: 1px solid #a9cbea; border-radius: 6px; padding: 8px 10px; }";
+    }
+
+    m_noticeLabel->setStyleSheet(style);
+    m_noticeLabel->setText(text);
+    m_noticeLabel->show();
+
+    QTimer::singleShot(timeoutMs, this, [this, cookie]() {
+        if (cookie != m_noticeCookie || !m_noticeLabel) return;
+        m_noticeLabel->hide();
+        m_noticeLabel->clear();
+    });
 }
 
 TargetOs MainWindow::selectedTargetOs() const
@@ -792,6 +945,147 @@ QIcon MainWindow::iconForNode(const DepNode& node) const
     if (node.category == DllCategory::OsCore || node.category == DllCategory::ApiSet)
         return style()->standardIcon(QStyle::SP_MessageBoxInformation);
     return style()->standardIcon(QStyle::SP_DialogApplyButton);
+}
+
+// ── Recent targets ────────────────────────────────────────────────────────────
+
+void MainWindow::pushRecentTarget(const QString& path)
+{
+    auto& v = m_config.recent_targets;
+    const std::string s = str(path);
+    v.erase(std::remove_if(v.begin(), v.end(),
+        [&s](const AppConfig::RecentTarget& rt){ return rt.path == s; }), v.end());
+    AppConfig::RecentTarget rt;
+    rt.path = s;
+    rt.search_paths = m_config.search_paths;
+    v.insert(v.begin(), std::move(rt));
+    if ((int)v.size() > AppConfig::kMaxRecentTargets)
+        v.resize(AppConfig::kMaxRecentTargets);
+    if (m_recentMenu) updateRecentMenu();
+}
+
+void MainWindow::updateRecentMenu()
+{
+    if (!m_recentMenu) return;
+    m_recentMenu->clear();
+    if (m_config.recent_targets.empty()) {
+        m_recentMenu->addAction(tr("(empty)"))->setEnabled(false);
+        return;
+    }
+    for (const auto& rt : m_config.recent_targets) {
+        QString qp = qstr(rt.path);
+        AppConfig::RecentTarget cap = rt;
+        QAction* act = m_recentMenu->addAction(qp);
+        connect(act, &QAction::triggered, this, [this, cap]() {
+            m_exePath->setText(qstr(cap.path));
+            m_config.last_target = cap.path;
+            m_config.search_paths = cap.search_paths;
+            refreshSearchPaths();
+            saveConfig();
+        });
+    }
+    m_recentMenu->addSeparator();
+    m_recentMenu->addAction(tr("Clear Recent"), this, [this]() {
+        m_config.recent_targets.clear();
+        saveConfig();
+        updateRecentMenu();
+    });
+}
+
+// ── Log helpers ───────────────────────────────────────────────────────────────
+
+QString MainWindow::logDir() const { return m_logDir; }
+
+void MainWindow::saveSessionLog()
+{
+    if (m_currentLogFile.isEmpty()) return;
+    QString text = m_log->toPlainText();
+    if (text.isEmpty()) return;
+    QFile f(m_currentLogFile);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Text))
+        QTextStream(&f) << text;
+}
+
+void MainWindow::exportLog()
+{
+    QString defaultName = m_currentLogFile.isEmpty()
+        ? QDir(m_logDir).absoluteFilePath(
+              QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss") + "_export.log")
+        : m_currentLogFile;
+    QString path = QFileDialog::getSaveFileName(
+        this, tr("Export Log"), defaultName, tr("Log files (*.log);;Text files (*.txt);;All files (*.*)"));
+    if (path.isEmpty()) return;
+    QFile f(path);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream(&f) << m_log->toPlainText();
+        QMessageBox::information(this, tr("Export Log"), tr("Log saved to:\n%1").arg(path));
+    } else {
+        QMessageBox::warning(this, tr("Export Log"), tr("Cannot write file:\n%1").arg(path));
+    }
+}
+
+void MainWindow::showHistoryLogs()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("History Logs"));
+    dlg.resize(900, 600);
+    QVBoxLayout* layout = new QVBoxLayout(&dlg);
+
+    QSplitter* splitter = new QSplitter(Qt::Horizontal, &dlg);
+
+    // Left: file list
+    QListWidget* fileList = new QListWidget;
+    QDir dir(m_logDir);
+    QStringList filters; filters << "*.log";
+    QStringList files = dir.entryList(filters, QDir::Files, QDir::Time);
+    for (const QString& f : files)
+        fileList->addItem(f);
+    splitter->addWidget(fileList);
+
+    // Right: log content viewer
+    QPlainTextEdit* viewer = new QPlainTextEdit;
+    viewer->setReadOnly(true);
+    viewer->setLineWrapMode(QPlainTextEdit::NoWrap);
+    QFont mono("Courier New", 9);
+    viewer->setFont(mono);
+    splitter->addWidget(viewer);
+    splitter->setStretchFactor(0, 1);
+    splitter->setStretchFactor(1, 3);
+    layout->addWidget(splitter, 1);
+
+    connect(fileList, &QListWidget::currentTextChanged, this,
+            [this, viewer](const QString& name) {
+        if (name.isEmpty()) return;
+        QFile f(m_logDir + "/" + name);
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text))
+            viewer->setPlainText(QTextStream(&f).readAll());
+    });
+
+    QHBoxLayout* buttons = new QHBoxLayout;
+    QPushButton* btnOpen = new QPushButton(tr("Open in Explorer"));
+    QPushButton* btnDel  = new QPushButton(tr("Delete"));
+    QPushButton* btnClose = new QPushButton(tr("Close"));
+    connect(btnOpen, &QPushButton::clicked, this, [this]() {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(m_logDir));
+    });
+    connect(btnDel, &QPushButton::clicked, this, [this, fileList, viewer]() {
+        QListWidgetItem* item = fileList->currentItem();
+        if (!item) return;
+        if (QMessageBox::question(this, tr("Delete Log"),
+                tr("Delete %1?").arg(item->text())) != QMessageBox::Yes) return;
+        QFile::remove(m_logDir + "/" + item->text());
+        delete item;
+        viewer->clear();
+    });
+    connect(btnClose, &QPushButton::clicked, &dlg, &QDialog::accept);
+    buttons->addWidget(btnOpen);
+    buttons->addWidget(btnDel);
+    buttons->addStretch(1);
+    buttons->addWidget(btnClose);
+    layout->addLayout(buttons);
+
+    if (fileList->count() > 0) fileList->setCurrentRow(0);
+    dlg.exec();
 }
 
 QString MainWindow::buildFullReport() const

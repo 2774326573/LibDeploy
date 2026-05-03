@@ -24,6 +24,8 @@
 #include <sstream>
 #include <thread>
 #include <mutex>
+#include <fstream>
+#include <wx/dir.h>
 
 namespace fs = std::filesystem;
 
@@ -46,6 +48,10 @@ enum {
     ID_DEPLOY,
     ID_SHOW_REPORT,
     ID_QT_DEPLOY,
+    ID_EXPORT_LOG,
+    ID_HISTORY_LOGS,
+    ID_RECENT_CLEAR,
+    ID_RECENT_FIRST = wxID_HIGHEST + 100, // 最多 10 个最近路径
 };
 
 // ── Tree helpers (defined early so all member functions can use them) ─────────
@@ -101,12 +107,21 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_BUTTON(ID_MOVE_DOWN,      MainFrame::OnMoveDown)
     EVT_TREE_SEL_CHANGED(wxID_ANY, MainFrame::OnTreeSelChanged)
     EVT_CLOSE(MainFrame::OnClose)
+    EVT_MENU(ID_EXPORT_LOG,    MainFrame::OnExportLog)
+    EVT_MENU(ID_HISTORY_LOGS,  MainFrame::OnHistoryLogs)
 wxEND_EVENT_TABLE()
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 MainFrame::MainFrame(const wxString& title)
     : wxFrame(nullptr, wxID_ANY, title, wxDefaultPosition, wxSize(1100, 700))
 {
+    // 初始化日志目录
+    m_log_dir = fs::path(
+        wxStandardPaths::Get().GetExecutablePath().ToStdString())
+        .parent_path().string() + "/logs";
+    std::error_code ec;
+    fs::create_directories(m_log_dir, ec);
+
     LoadConfig();
     BuildMenuBar();
     BuildUI();
@@ -127,6 +142,13 @@ void MainFrame::BuildMenuBar() {
     auto* mFile = new wxMenu;
     mFile->Append(ID_OPEN_EXE, _("&Open EXE...\tCtrl+O"));
     mFile->Append(ID_ANALYZE,  _("&Analyze\tF5"));
+    mFile->AppendSeparator();
+    m_recent_menu = new wxMenu;
+    mFile->AppendSubMenu(m_recent_menu, _("Recent Files"));
+    UpdateRecentMenu();
+    mFile->AppendSeparator();
+    mFile->Append(ID_EXPORT_LOG,   _("&Export Log..."));
+    mFile->Append(ID_HISTORY_LOGS, _("&History Logs..."));
     mFile->AppendSeparator();
     mFile->Append(wxID_EXIT,   _("E&xit"));
 
@@ -411,6 +433,8 @@ void MainFrame::OnOpenExe(wxCommandEvent&) {
     if (dlg.ShowModal() == wxID_CANCEL) return;
     m_exe_path->SetValue(dlg.GetPath());
     m_cfg.last_target = dlg.GetPath().ToStdString();
+    PushRecentTarget(m_cfg.last_target);
+    ConfigManager::Save(m_cfg);
 }
 
 void MainFrame::OnAnalyze(wxCommandEvent&) {
@@ -424,6 +448,12 @@ void MainFrame::OnAnalyze(wxCommandEvent&) {
     m_redist_warn->Hide();
     Log(_("Analyzing: ") + path);
     m_cfg.target_os = SelectedTargetOs();
+    PushRecentTarget(path.ToStdString());
+    // 新建当次会话日志文件名
+    wxString exeName = wxFileName(path).GetName();
+    m_current_log_file = m_log_dir + "/" +
+        wxDateTime::Now().Format("%Y-%m-%d_%H-%M-%S").ToStdString()
+        + "_" + exeName.ToStdString() + ".log";
     RunAnalyzeAsync(path);
 }
 
@@ -515,6 +545,7 @@ void MainFrame::RunAnalyzeAsync(const wxString& path) {
     m_has_report = true;
 
     PopulateTree(m_report);
+    SaveSessionLog();
     UpdateRedistWarning(m_report);
     for (const auto& warning : m_report.warnings)
         Log("[WARN] " + wxString::FromUTF8(warning));
@@ -662,55 +693,31 @@ void MainFrame::OnDeploy(wxCommandEvent& e) {
 }
 
 void MainFrame::OnPackZip(wxCommandEvent&) {
-    // 如果没有分析结果，先自动分析
     if (!m_has_report) {
         wxCommandEvent dummy;
         OnAnalyze(dummy);
         if (!m_has_report) return;
     }
-
-    // 自动保存到目标 exe 所在目录
     wxFileName exe_fn(m_report.target_exe);
+    wxString stamp = wxDateTime::Now().Format("%Y%m%d_%H%M%S");
     wxString zip_path = exe_fn.GetPath() + wxFileName::GetPathSeparator()
-                        + exe_fn.GetName() + ".zip";
+                        + exe_fn.GetName() + "_" + stamp + ".zip";
     Log(_("Creating ZIP: ") + zip_path);
-
-    // 打包时强制包含所有 Redist DLL（不受全局配置影响）
-    FileDeployer::Options opts;
-    opts.copy_redist_dlls = true;
-
-    std::vector<std::string> errors;
-    bool ok = FileDeployer::PackZip(m_report, zip_path.ToStdString(), opts, errors,
-        [this](const std::string& msg, int /*pct*/){ Log(msg); });
-
-    for (const auto& e : errors) Log(_("ERROR: ") + e);
-
-    if (ok) {
-        wxMessageBox(wxString::Format(_("ZIP created:\n%s"), zip_path),
-                     _("Pack ZIP"), wxOK | wxICON_INFORMATION, this);
-    } else {
-        wxString err_msg = _("ZIP creation failed.\n");
-        for (const auto& e : errors) err_msg += "\n" + wxString::FromUTF8(e);
-        wxMessageBox(err_msg, _("Pack ZIP"), wxOK | wxICON_ERROR, this);
-    }
+    RunPackZipAsync(zip_path.ToStdString());
 }
 
 void MainFrame::OnGenInstaller(wxCommandEvent&) {
-    // 如果没有分析结果，先自动分析
     if (!m_has_report) {
         wxCommandEvent dummy;
         OnAnalyze(dummy);
         if (!m_has_report) return;
     }
 
-    // 优先使用内置 makensis（build/bin/nsis/makensis.exe）
-    wxString app_dir = wxFileName(
-        wxStandardPaths::Get().GetExecutablePath()).GetPath();
+    wxString app_dir = wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath();
     wxString bundled_nsis = app_dir + wxFileName::GetPathSeparator()
                             + "nsis" + wxFileName::GetPathSeparator()
                             + "Bin" + wxFileName::GetPathSeparator()
                             + "makensis.exe";
-
     wxString makensis_path;
     if (wxFileName::FileExists(bundled_nsis)) {
         makensis_path = bundled_nsis;
@@ -726,40 +733,15 @@ void MainFrame::OnGenInstaller(wxCommandEvent&) {
         return;
     }
 
-    // 应用名称默认用 exe 文件名
     wxFileName exe_fn(m_report.target_exe);
     wxString app_name = exe_fn.GetName();
-
-    // 安装包自动保存到目标 exe 所在目录
+    wxString stamp = wxDateTime::Now().Format("%Y%m%d_%H%M%S");
     wxString out_path = exe_fn.GetPath() + wxFileName::GetPathSeparator()
-                        + app_name + "_Setup.exe";
+                        + app_name + "_Setup_" + stamp + ".exe";
     Log(_("Generating installer: ") + out_path);
-
-    // 资源子目录已在 OnAnalyze 时由 DepResolver 自动发现（report.resource_dirs）
-    FileDeployer::Options opts;
-    opts.copy_redist_dlls        = m_cfg.copy_redist_dlls;
-    opts.bundle_redist_installer = m_cfg.bundle_redist_installer;
-
-    std::vector<std::string> errors;
-    bool ok = FileDeployer::GenInstaller(
-        m_report,
-        out_path.ToStdString(),
-        app_name.ToStdString(),
-        makensis_path.ToStdString(),
-        opts,
-        errors,
-        [this](const std::string& msg, int /*pct*/){ Log(msg); });
-
-    for (const auto& e : errors) Log(_("ERROR: ") + e);
-
-    if (ok) {
-        wxMessageBox(wxString::Format(_("Installer created:\n%s"), out_path),
-                     _("Generate Installer"), wxOK | wxICON_INFORMATION, this);
-    } else {
-        wxString err_msg = _("Installer generation failed.\n");
-        for (const auto& e : errors) err_msg += "\n" + wxString::FromUTF8(e);
-        wxMessageBox(err_msg, _("Generate Installer"), wxOK | wxICON_ERROR, this);
-    }
+    RunGenInstallerAsync(out_path.ToStdString(),
+                         app_name.ToStdString(),
+                         makensis_path.ToStdString());
 }
 
 void MainFrame::OnQtDeploy(wxCommandEvent&) {
@@ -887,7 +869,12 @@ void MainFrame::OnQtDeploy(wxCommandEvent&) {
 }
 
 void MainFrame::OnAddSearchPath(wxCommandEvent&) {
-    wxDirDialog dlg(this, _("Select search path"));
+    wxString startDir;
+    if (!m_cfg.search_paths.empty())
+        startDir = wxString::FromUTF8(m_cfg.search_paths.back());
+    else if (!m_cfg.last_target.empty())
+        startDir = wxFileName(wxString::FromUTF8(m_cfg.last_target)).GetPath();
+    wxDirDialog dlg(this, _("Select search path"), startDir);
     if (dlg.ShowModal() == wxID_CANCEL) return;
     m_cfg.search_paths.push_back(dlg.GetPath().ToStdString());
     RefreshSearchList();
@@ -1215,6 +1202,301 @@ void MainFrame::SwitchLanguage(const std::string& lang_code) {
         extern void LibDeployApp_SwitchLanguage(const std::string&, MainFrame*);
         LibDeployApp_SwitchLanguage(lang_code, this);
     });
+}
+
+void MainFrame::RunPackZipAsync(const std::string& zip_path) {
+    struct SharedState {
+        std::mutex               mtx;
+        std::string              msg  = "Collecting files...";
+        int                      pct  = 0;
+        bool                     done = false;
+        bool                     ok   = false;
+        std::vector<std::string> errors;
+        std::vector<std::string> log_lines;
+    };
+    auto state = std::make_shared<SharedState>();
+
+    FileDeployer::Options opts;
+    opts.copy_redist_dlls = true;
+
+    auto* dlg = new wxProgressDialog(
+        _("Packing ZIP"), _("Collecting files..."), 100, this,
+        wxPD_APP_MODAL | wxPD_ELAPSED_TIME | wxPD_AUTO_HIDE);
+    dlg->Show();
+
+    std::thread worker([state, zip_path, opts, report = m_report]() mutable {
+        state->ok = FileDeployer::PackZip(
+            report, zip_path, opts, state->errors,
+            [&state](const std::string& m, int p) {
+                std::lock_guard<std::mutex> lk(state->mtx);
+                state->msg = m;
+                state->pct = p;
+                state->log_lines.push_back(m);
+            });
+        std::lock_guard<std::mutex> lk(state->mtx);
+        state->done = true;
+    });
+
+    while (true) {
+        wxMilliSleep(50);
+        bool is_done; int cur_pct; std::string cur_msg;
+        std::vector<std::string> lines;
+        {
+            std::lock_guard<std::mutex> lk(state->mtx);
+            is_done = state->done;
+            cur_pct = state->pct;
+            cur_msg = state->msg;
+            lines.swap(state->log_lines);
+        }
+        for (const auto& l : lines) Log(wxString::FromUTF8(l));
+        dlg->Update(cur_pct, wxString::FromUTF8(cur_msg));
+        if (is_done) break;
+    }
+    worker.join();
+    dlg->Destroy();
+
+    for (const auto& e : state->errors) Log(_("ERROR: ") + wxString::FromUTF8(e));
+    if (state->ok) {
+        wxMessageBox(wxString::Format(_("ZIP created:\n%s"),
+                                      wxString::FromUTF8(zip_path)),
+                     _("Pack ZIP"), wxOK | wxICON_INFORMATION, this);
+    } else {
+        wxString err_msg = _("ZIP creation failed.");
+        for (const auto& e : state->errors)
+            err_msg += "\n" + wxString::FromUTF8(e);
+        wxMessageBox(err_msg, _("Pack ZIP"), wxOK | wxICON_ERROR, this);
+    }
+}
+
+void MainFrame::RunGenInstallerAsync(const std::string& out_path,
+                                     const std::string& app_name,
+                                     const std::string& makensis_path) {
+    struct SharedState {
+        std::mutex               mtx;
+        std::string              msg  = "Running NSIS...";
+        int                      pct  = 0;
+        bool                     done = false;
+        bool                     ok   = false;
+        std::vector<std::string> errors;
+        std::vector<std::string> log_lines;
+    };
+    auto state = std::make_shared<SharedState>();
+
+    FileDeployer::Options opts;
+    opts.copy_redist_dlls        = m_cfg.copy_redist_dlls;
+    opts.bundle_redist_installer = m_cfg.bundle_redist_installer;
+
+    auto* dlg = new wxProgressDialog(
+        _("Generating Installer"), _("Running NSIS..."), 100, this,
+        wxPD_APP_MODAL | wxPD_ELAPSED_TIME | wxPD_AUTO_HIDE);
+    dlg->Show();
+
+    std::thread worker([state, out_path, app_name, makensis_path, opts,
+                        report = m_report]() mutable {
+        state->ok = FileDeployer::GenInstaller(
+            report, out_path, app_name, makensis_path, opts, state->errors,
+            [&state](const std::string& m, int p) {
+                std::lock_guard<std::mutex> lk(state->mtx);
+                state->msg = m;
+                state->pct = p;
+                state->log_lines.push_back(m);
+            });
+        std::lock_guard<std::mutex> lk(state->mtx);
+        state->done = true;
+    });
+
+    while (true) {
+        wxMilliSleep(50);
+        bool is_done; int cur_pct; std::string cur_msg;
+        std::vector<std::string> lines;
+        {
+            std::lock_guard<std::mutex> lk(state->mtx);
+            is_done = state->done;
+            cur_pct = state->pct;
+            cur_msg = state->msg;
+            lines.swap(state->log_lines);
+        }
+        for (const auto& l : lines) Log(wxString::FromUTF8(l));
+        dlg->Update(cur_pct, wxString::FromUTF8(cur_msg));
+        if (is_done) break;
+    }
+    worker.join();
+    dlg->Destroy();
+
+    for (const auto& e : state->errors) Log(_("ERROR: ") + wxString::FromUTF8(e));
+    if (state->ok) {
+        wxMessageBox(wxString::Format(_("Installer created:\n%s"),
+                                      wxString::FromUTF8(out_path)),
+                     _("Generate Installer"), wxOK | wxICON_INFORMATION, this);
+    } else {
+        wxString err_msg = _("Installer generation failed.");
+        for (const auto& e : state->errors)
+            err_msg += "\n" + wxString::FromUTF8(e);
+        wxMessageBox(err_msg, _("Generate Installer"), wxOK | wxICON_ERROR, this);
+    }
+}
+
+// ── Recent targets ────────────────────────────────────────────────────────────
+
+void MainFrame::PushRecentTarget(const std::string& path) {
+    auto& v = m_cfg.recent_targets;
+    v.erase(std::remove_if(v.begin(), v.end(), [&](const AppConfig::RecentTarget& rt) {
+        return rt.path == path;
+    }), v.end());
+
+    AppConfig::RecentTarget rt;
+    rt.path = path;
+    rt.search_paths = m_cfg.search_paths;
+    v.insert(v.begin(), std::move(rt));
+
+    if ((int)v.size() > AppConfig::kMaxRecentTargets)
+        v.resize(AppConfig::kMaxRecentTargets);
+    UpdateRecentMenu();
+}
+
+void MainFrame::UpdateRecentMenu() {
+    if (!m_recent_menu) return;
+    for (int i = 0; i < AppConfig::kMaxRecentTargets; ++i)
+        Disconnect(ID_RECENT_FIRST + i, wxEVT_MENU);
+    Disconnect(ID_RECENT_CLEAR, wxEVT_MENU);
+
+    // 清空已有条目（从末尾删，避免索引混乱）
+    while (m_recent_menu->GetMenuItemCount() > 0)
+        m_recent_menu->Destroy(m_recent_menu->FindItemByPosition(0));
+
+    if (m_cfg.recent_targets.empty()) {
+        m_recent_menu->Append(wxID_ANY, _("(empty)"))->Enable(false);
+        return;
+    }
+    for (int i = 0; i < (int)m_cfg.recent_targets.size(); ++i) {
+        int id = ID_RECENT_FIRST + i;
+        wxString label = wxString::FromUTF8(m_cfg.recent_targets[i].path);
+        m_recent_menu->Append(id, label);
+        Bind(wxEVT_MENU, [this, i](wxCommandEvent&) {
+            if (i < (int)m_cfg.recent_targets.size()) {
+                const auto& rt = m_cfg.recent_targets[i];
+                wxString p = wxString::FromUTF8(rt.path);
+                m_exe_path->SetValue(p);
+                m_cfg.last_target = rt.path;
+                if (!rt.search_paths.empty()) {
+                    m_cfg.search_paths = rt.search_paths;
+                    RefreshSearchList();
+                }
+            }
+        }, id);
+    }
+    m_recent_menu->AppendSeparator();
+    m_recent_menu->Append(ID_RECENT_CLEAR, _("Clear Recent"));
+    Bind(wxEVT_MENU, [this](wxCommandEvent&) {
+        m_cfg.recent_targets.clear();
+        ConfigManager::Save(m_cfg);
+        UpdateRecentMenu();
+    }, ID_RECENT_CLEAR);
+}
+
+// ── Log helpers ───────────────────────────────────────────────────────────────
+
+void MainFrame::SaveSessionLog() {
+    if (m_current_log_file.empty() || !m_log) return;
+    std::ofstream f(m_current_log_file);
+    if (f) f << m_log->GetValue().ToStdString();
+}
+
+void MainFrame::OnExportLog(wxCommandEvent&) {
+    wxString defaultPath = wxString::FromUTF8(
+        m_current_log_file.empty()
+            ? m_log_dir + "/" +
+              wxDateTime::Now().Format("%Y-%m-%d_%H-%M-%S").ToStdString() + "_export.log"
+            : m_current_log_file);
+    wxFileDialog dlg(this, _("Export Log"), "", defaultPath,
+                     _("Log files (*.log)|*.log|Text files (*.txt)|*.txt|All files|*.*"),
+                     wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dlg.ShowModal() == wxID_CANCEL) return;
+    std::ofstream f(dlg.GetPath().ToStdString());
+    if (f) {
+        f << m_log->GetValue().ToStdString();
+        wxMessageBox(wxString::Format(_("Log saved to:\n%s"), dlg.GetPath()),
+                     _("Export Log"), wxOK | wxICON_INFORMATION, this);
+    } else {
+        wxMessageBox(_("Cannot write file."), _("Export Log"), wxOK | wxICON_ERROR, this);
+    }
+}
+
+void MainFrame::OnHistoryLogs(wxCommandEvent&) {
+    wxDialog dlg(this, wxID_ANY, _("History Logs"),
+                 wxDefaultPosition, wxSize(860, 560),
+                 wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+    auto* sizer = new wxBoxSizer(wxVERTICAL);
+    auto* hsplit = new wxSplitterWindow(&dlg, wxID_ANY,
+                                        wxDefaultPosition, wxDefaultSize,
+                                        wxSP_LIVE_UPDATE | wxSP_3D);
+
+    // 左：文件列表
+    auto* fileList = new wxListBox(hsplit, wxID_ANY);
+    wxDir dir(wxString::FromUTF8(m_log_dir));
+    wxString filename;
+    std::vector<wxString> logFiles;
+    if (dir.IsOpened() && dir.GetFirst(&filename, "*.log", wxDIR_FILES)) {
+        do { logFiles.push_back(filename); } while (dir.GetNext(&filename));
+    }
+    std::sort(logFiles.rbegin(), logFiles.rend()); // 最新在前
+    for (const auto& f : logFiles) fileList->Append(f);
+
+    // 右：内容查看
+    auto* viewer = new wxTextCtrl(hsplit, wxID_ANY, "",
+                                  wxDefaultPosition, wxDefaultSize,
+                                  wxTE_MULTILINE | wxTE_READONLY | wxHSCROLL | wxTE_RICH2);
+    viewer->SetFont(wxFont(9, wxFONTFAMILY_TELETYPE,
+                           wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+    hsplit->SplitVertically(fileList, viewer, 240);
+    sizer->Add(hsplit, 1, wxEXPAND | wxALL, 4);
+
+    auto loadLog = [this, viewer](const wxString& name) {
+        wxString path = wxString::FromUTF8(m_log_dir) + wxFileName::GetPathSeparator()
+                        + name;
+        wxFile f(path);
+        if (!f.IsOpened()) return;
+        wxString content;
+        f.ReadAll(&content);
+        viewer->SetValue(content);
+    };
+
+    fileList->Bind(wxEVT_LISTBOX, [fileList, loadLog](wxCommandEvent&) {
+        int sel = fileList->GetSelection();
+        if (sel == wxNOT_FOUND) return;
+        loadLog(fileList->GetString(sel));
+    });
+
+    // 按钮行
+    auto* btnRow = new wxBoxSizer(wxHORIZONTAL);
+    auto* btnOpen = new wxButton(&dlg, wxID_ANY, _("Open Folder"));
+    auto* btnDel  = new wxButton(&dlg, wxID_ANY, _("Delete"));
+    auto* btnClose = new wxButton(&dlg, wxID_OK, _("Close"));
+    btnOpen->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        wxLaunchDefaultApplication(wxString::FromUTF8(m_log_dir));
+    });
+    btnDel->Bind(wxEVT_BUTTON, [this, fileList, viewer](wxCommandEvent&) {
+        int sel = fileList->GetSelection();
+        if (sel == wxNOT_FOUND) return;
+        wxString name = fileList->GetString(sel);
+        if (wxMessageBox(wxString::Format(_("Delete %s?"), name),
+                         _("Delete Log"), wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
+        wxRemoveFile(wxString::FromUTF8(m_log_dir) + wxFileName::GetPathSeparator() + name);
+        fileList->Delete(sel);
+        viewer->Clear();
+    });
+    btnRow->Add(btnOpen, 0, wxRIGHT, 6);
+    btnRow->Add(btnDel,  0, wxRIGHT, 6);
+    btnRow->AddStretchSpacer();
+    btnRow->Add(btnClose, 0);
+    sizer->Add(btnRow, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+    dlg.SetSizer(sizer);
+
+    if (fileList->GetCount() > 0) {
+        fileList->SetSelection(0);
+        loadLog(fileList->GetString(0));
+    }
+    dlg.ShowModal();
 }
 
 void MainFrame::UpdateRedistWarning(const DepReport& report) {
