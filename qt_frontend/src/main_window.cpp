@@ -30,6 +30,7 @@
 #include <QStyleFactory>
 #include <QTextStream>
 #include <QTime>
+#include <QRegExp>
 
 #include <algorithm>
 #include <filesystem>
@@ -40,6 +41,34 @@ namespace fs = std::filesystem;
 
 namespace {
 constexpr int NodePtrRole = Qt::UserRole + 1;
+
+class DepTreeWidget : public QTreeWidget {
+public:
+    explicit DepTreeWidget(QWidget* parent = nullptr)
+        : QTreeWidget(parent) {}
+
+protected:
+    QMimeData* mimeData(const QList<QTreeWidgetItem*> items) const override {
+        QMimeData* data = QTreeWidget::mimeData(items);
+        if (!data) data = new QMimeData();
+
+        QStringList names;
+        for (QTreeWidgetItem* item : items) {
+            if (!item) continue;
+            QString text = item->text(0).trimmed();
+            if (text.endsWith(" (...)")) text.chop(6);
+            if (!text.isEmpty()) names << text;
+        }
+        if (!names.isEmpty()) {
+            data->setText(names.join(","));
+        }
+        return data;
+    }
+
+    Qt::DropActions supportedDropActions() const override {
+        return Qt::CopyAction;
+    }
+};
 
 
 QString appDir()
@@ -78,16 +107,16 @@ QString normalizeExcludedDirToken(QString token)
     // Strip repeated-node suffix from tree labels
     if (token.endsWith(" (...)")) token.chop(6);
 
+    // Remove trailing slashes from directory-style display text
+    while (token.endsWith('/') || token.endsWith('\\')) {
+        token.chop(1);
+    }
+
     // If a path-like token is dropped, keep only the last segment
     int slash = token.lastIndexOf('/');
     int backslash = token.lastIndexOf('\\');
     int cut = std::max(slash, backslash);
     if (cut >= 0) token = token.mid(cut + 1);
-
-    // Remove trailing slashes from directory-style display text
-    while (token.endsWith('/') || token.endsWith('\\')) {
-        token.chop(1);
-    }
 
     token = token.trimmed().toLower();
 
@@ -333,13 +362,13 @@ void MainWindow::buildUi()
     root->addLayout(top);
 
     QSplitter* splitter = new QSplitter(Qt::Horizontal, this);
-    m_tree = new QTreeWidget;
+    m_tree = new DepTreeWidget;
     m_tree->setColumnCount(3);
     m_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     m_tree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    m_tree->setDragDropMode(QAbstractItemView::DragOnly);  // Enable drag from tree
-    m_tree->setDefaultDropAction(Qt::DropAction::MoveAction);
+    m_tree->setDragDropMode(QAbstractItemView::DragOnly);
+    m_tree->setDefaultDropAction(Qt::DropAction::CopyAction);
     connect(m_tree, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* item) {
         updateDetails(item);
     });
@@ -894,7 +923,7 @@ void MainWindow::addExcludedDir()
 
     int added = 0;
     int skipped = 0;
-    const QStringList parts = input.split(',', QString::SkipEmptyParts);
+    const QStringList parts = input.split(QRegExp("[,，、;；\\n\\r\\t]+"), QString::SkipEmptyParts);
     for (const QString& part : parts) {
         const QString token = normalizeExcludedDirToken(part);
         if (token.isEmpty()) continue;
@@ -958,7 +987,7 @@ void MainWindow::addExcludedDirFromDrag(const QString& text)
 
     int added = 0;
     int skipped = 0;
-    const QStringList parts = input.split(',', QString::SkipEmptyParts);
+    const QStringList parts = input.split(QRegExp("[,，、;；\\n\\r\\t]+"), QString::SkipEmptyParts);
     for (const QString& part : parts) {
         const QString token = normalizeExcludedDirToken(part);
         if (token.isEmpty()) continue;

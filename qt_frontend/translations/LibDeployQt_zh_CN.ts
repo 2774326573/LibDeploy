@@ -378,6 +378,18 @@ Bundled NSIS should be in nsis/ next to LibDeployQt.exe.</source>
         <translation>已添加 %1 个目录，跳过 %2 个重复项。</translation>
     </message>
     <message>
+        <source>Clear</source>
+        <translation>清空</translation>
+    </message>
+    <message>
+        <source>Confirm Clear</source>
+        <translation>确认清空</translation>
+    </message>
+    <message>
+        <source>Clear all excluded directories? This action cannot be undone.</source>
+        <translation>清空所有排除目录？此操作不可撤销。</translation>
+    </message>
+    <message>
         <source>Name: </source>
         <translation>名称: </translation>
     </message>

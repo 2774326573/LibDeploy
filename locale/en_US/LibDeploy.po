@@ -336,6 +336,15 @@ msgstr "No new directories were added (all already exist or invalid)."
 msgid "Added %d directories, skipped %d duplicates."
 msgstr "Added %d directories, skipped %d duplicates."
 
+msgid "Clear"
+msgstr "Clear"
+
+msgid "Confirm Clear"
+msgstr "Confirm Clear"
+
+msgid "Clear all excluded directories? This action cannot be undone."
+msgstr "Clear all excluded directories? This action cannot be undone."
+
 msgid "Dependency Full Report\n"
 msgstr "Dependency Full Report\n"
 

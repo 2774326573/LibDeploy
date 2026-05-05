@@ -336,6 +336,15 @@ msgstr "没有新增目录（都已存在或无效）。"
 msgid "Added %d directories, skipped %d duplicates."
 msgstr "已添加 %d 个目录，跳过 %d 个重复项。"
 
+msgid "Clear"
+msgstr "清空"
+
+msgid "Confirm Clear"
+msgstr "确认清空"
+
+msgid "Clear all excluded directories? This action cannot be undone."
+msgstr "清空所有排除目录？此操作不可撤销。"
+
 msgid "Dependency Full Report\n"
 msgstr "完整依赖报告\n"
 

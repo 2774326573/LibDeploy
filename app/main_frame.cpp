@@ -105,16 +105,16 @@ static wxString NormalizeExcludedDirToken(wxString token)
         token = token.Left(token.Length() - 6);
     }
 
+    // Remove trailing slashes from directory-style display text
+    while (token.EndsWith("/") || token.EndsWith("\\")) {
+        token = token.Left(token.Length() - 1);
+    }
+
     // If a path-like token is dropped, keep only the last segment
     int slash = token.Find('/', true);
     int backslash = token.Find('\\', true);
     int cut = std::max(slash, backslash);
     if (cut != wxNOT_FOUND) token = token.Mid(cut + 1);
-
-    // Remove trailing slashes from directory-style display text
-    while (token.EndsWith("/") || token.EndsWith("\\")) {
-        token = token.Left(token.Length() - 1);
-    }
 
     token.Trim(true).Trim(false);
     token.MakeLower();
@@ -993,7 +993,7 @@ void MainFrame::OnAddExcludedDir(wxCommandEvent&) {
     wxString input = dlg.GetValue();
     if (input.Trim(true).Trim(false).IsEmpty()) return;
 
-    wxStringTokenizer tokenizer(input, ",，");
+    wxStringTokenizer tokenizer(input, ",，、;；\n\r\t");
     int added = 0;
     int skipped = 0;
     while (tokenizer.HasMoreTokens()) {
@@ -1290,9 +1290,8 @@ void MainFrame::OnExcludedDirDropped(const wxString& text) {
     input.Trim(true).Trim(false);
     if (input.IsEmpty()) return;
     
-    wxStringTokenizer tokenizer(input, ",，");
+    wxStringTokenizer tokenizer(input, ",，、;；\n\r\t");
     int added = 0;
-    int skipped = 0;
     
     while (tokenizer.HasMoreTokens()) {
         wxString token = NormalizeExcludedDirToken(tokenizer.GetNextToken());
@@ -1302,7 +1301,6 @@ void MainFrame::OnExcludedDirDropped(const wxString& text) {
         if (std::find(m_cfg.extra_excluded_dirs.begin(),
                       m_cfg.extra_excluded_dirs.end(),
                       dir_name) != m_cfg.extra_excluded_dirs.end()) {
-            ++skipped;
             continue;
         }
         
@@ -1317,21 +1315,26 @@ void MainFrame::OnExcludedDirDropped(const wxString& text) {
 }
 
 void MainFrame::OnTreeBeginDrag(wxTreeEvent& evt) {
+    // We provide our own wxDropSource flow; veto the tree's internal drag flow
+    // to avoid MSW drag-image re-entry assertions.
+    evt.Veto();
+
+    if (m_tree_drag_in_progress) {
+        return;
+    }
+
     auto id = evt.GetItem();
     if (!id.IsOk()) {
-        evt.Veto();
         return;
     }
 
     wxTreeItemData* data = m_dep_tree->GetItemData(id);
     if (!data) {
-        evt.Veto();
         return;
     }
 
     auto* nd = dynamic_cast<NodeData*>(data);
     if (!nd || !nd->node) {
-        evt.Veto();
         return;
     }
 
@@ -1347,11 +1350,10 @@ void MainFrame::OnTreeBeginDrag(wxTreeEvent& evt) {
     wxString drag_text = wxString::FromUTF8(dll_name);
     wxTextDataObject textData(drag_text);
     wxDropSource source(textData, m_dep_tree);
-    
-    // Start the drag operation
-    source.DoDragDrop(wxDrag_DefaultMove);
-    
-    evt.Allow();
+
+    m_tree_drag_in_progress = true;
+    source.DoDragDrop(wxDrag_CopyOnly);
+    m_tree_drag_in_progress = false;
 }
 
 

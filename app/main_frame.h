@@ -41,6 +41,7 @@ private:
     AppConfig  m_cfg;
     DepReport  m_report;
     bool       m_has_report = false;
+    bool       m_tree_drag_in_progress = false;
     std::string m_log_dir;          // logs/ directory
     std::string m_current_log_file; // current session log path
 
