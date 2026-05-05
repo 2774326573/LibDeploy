@@ -43,8 +43,7 @@ enum {
     ID_MOVE_DOWN,
     ID_ADD_EXCLUDE_DIR,
     ID_REMOVE_EXCLUDE_DIR,
-    ID_MOVE_EXCLUDE_UP,
-    ID_MOVE_EXCLUDE_DOWN,
+    ID_CLEAR_EXCLUDE_DIR,
     ID_LANG_EN,
     ID_LANG_ZH,
     ID_THEME_SYSTEM,
@@ -67,6 +66,21 @@ struct NodeData : wxTreeItemData {
     explicit NodeData(const DepNode* n) : node(n) {}
 };
 
+// ExcludedDirsDropTarget implementation
+ExcludedDirsDropTarget::ExcludedDirsDropTarget(MainFrame* frame)
+    : m_frame(frame) {}
+
+bool ExcludedDirsDropTarget::OnDropText(wxCoord x, wxCoord y, const wxString& text) {
+    if (!m_frame) return false;
+    
+    wxString input(text);  // Create a copy
+    input.Trim(true).Trim(false);
+    if (input.IsEmpty()) return false;
+    
+    m_frame->OnExcludedDirDropped(input);
+    return true;
+}
+
 static int ImageForNode(const DepNode& n,
                         int found, int missing, int redist, int system, int apiset)
 {
@@ -75,6 +89,43 @@ static int ImageForNode(const DepNode& n,
     if (n.status   == DepStatus::Missing)     return missing;
     if (n.status   == DepStatus::MaybeAbsent) return redist;
     return found;
+}
+
+static wxString NormalizeExcludedDirToken(wxString token)
+{
+    token.Trim(true).Trim(false);
+    if (token.IsEmpty()) return token;
+
+    // Strip display wrappers such as [name/] or [name]
+    if (token.StartsWith("[")) token = token.Mid(1);
+    if (token.EndsWith("]")) token = token.Left(token.Length() - 1);
+
+    // Strip repeated-node suffix from tree labels
+    if (token.EndsWith(" (...)")) {
+        token = token.Left(token.Length() - 6);
+    }
+
+    // If a path-like token is dropped, keep only the last segment
+    int slash = token.Find('/', true);
+    int backslash = token.Find('\\', true);
+    int cut = std::max(slash, backslash);
+    if (cut != wxNOT_FOUND) token = token.Mid(cut + 1);
+
+    // Remove trailing slashes from directory-style display text
+    while (token.EndsWith("/") || token.EndsWith("\\")) {
+        token = token.Left(token.Length() - 1);
+    }
+
+    token.Trim(true).Trim(false);
+    token.MakeLower();
+
+    // If a DLL name is dropped, keep its base name
+    if (token.EndsWith(".dll")) {
+        token = token.Left(token.Length() - 4);
+    }
+
+    token.Trim(true).Trim(false);
+    return token;
 }
 
 static void ApplyThemeRecursive(wxWindow* window,
@@ -112,9 +163,9 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_BUTTON(ID_MOVE_DOWN,      MainFrame::OnMoveDown)
     EVT_BUTTON(ID_ADD_EXCLUDE_DIR,    MainFrame::OnAddExcludedDir)
     EVT_BUTTON(ID_REMOVE_EXCLUDE_DIR, MainFrame::OnRemoveExcludedDir)
-    EVT_BUTTON(ID_MOVE_EXCLUDE_UP,    MainFrame::OnMoveExcludeUp)
-    EVT_BUTTON(ID_MOVE_EXCLUDE_DOWN,  MainFrame::OnMoveExcludeDown)
+    EVT_BUTTON(ID_CLEAR_EXCLUDE_DIR,  MainFrame::OnClearExcludedDirs)
     EVT_TREE_SEL_CHANGED(wxID_ANY, MainFrame::OnTreeSelChanged)
+    EVT_TREE_BEGIN_DRAG(wxID_ANY, MainFrame::OnTreeBeginDrag)
     EVT_CLOSE(MainFrame::OnClose)
     EVT_MENU(ID_EXPORT_LOG,    MainFrame::OnExportLog)
     EVT_MENU(ID_HISTORY_LOGS,  MainFrame::OnHistoryLogs)
@@ -298,13 +349,13 @@ void MainFrame::BuildUI() {
     m_excluded_dirs_list = new wxListCtrl(right_panel, wxID_ANY, wxDefaultPosition,
                                           wxSize(-1, 100), wxLC_LIST | wxBORDER_SUNKEN);
     RefreshExcludedDirsList();
+    m_excluded_dirs_list->SetDropTarget(new ExcludedDirsDropTarget(this));
     exclude_box->Add(m_excluded_dirs_list, 1, wxEXPAND | wxBOTTOM, 2);
 
     auto* exclude_btn_row = new wxBoxSizer(wxHORIZONTAL);
     exclude_btn_row->Add(new wxButton(right_panel, ID_ADD_EXCLUDE_DIR,    _("Add"),  wxDefaultPosition, wxSize(60,-1)), 0, wxRIGHT, 2);
     exclude_btn_row->Add(new wxButton(right_panel, ID_REMOVE_EXCLUDE_DIR, _("Del"),  wxDefaultPosition, wxSize(60,-1)), 0, wxRIGHT, 2);
-    exclude_btn_row->Add(new wxButton(right_panel, ID_MOVE_EXCLUDE_UP,    _("Up"),   wxDefaultPosition, wxSize(60,-1)), 0, wxRIGHT, 2);
-    exclude_btn_row->Add(new wxButton(right_panel, ID_MOVE_EXCLUDE_DOWN,  _("Down"), wxDefaultPosition, wxSize(60,-1)));
+    exclude_btn_row->Add(new wxButton(right_panel, ID_CLEAR_EXCLUDE_DIR,  _("Clear"), wxDefaultPosition, wxSize(60,-1)));
     exclude_box->Add(exclude_btn_row, 0, wxEXPAND | wxTOP, 2);
 
     exclude_box->Add(new wxStaticText(right_panel, wxID_ANY,
@@ -504,12 +555,8 @@ void MainFrame::RunAnalyzeAsync(const wxString& path) {
 
     // 在主线程收集所有参数，避免线程内访问 wxWidgets 对象
     std::string path_str = path.ToStdString();
-    std::string app_dir  = fs::path(
-        wxStandardPaths::Get().GetExecutablePath().ToStdString())
-        .parent_path().string();
 
     std::vector<std::string> effective_paths;
-    effective_paths.push_back(app_dir);
     for (const auto& p : m_cfg.search_paths) effective_paths.push_back(p);
 
     std::vector<std::string> resource_scan_paths;
@@ -804,12 +851,8 @@ void MainFrame::OnQtDeploy(wxCommandEvent&) {
 
     // Rebuild a minimal resolver just to call RunQtDeployTool on the existing report
     std::string path_str = m_report.target_exe;
-    std::string app_dir  = fs::path(
-        wxStandardPaths::Get().GetExecutablePath().ToStdString())
-        .parent_path().string();
 
     std::vector<std::string> effective_paths;
-    effective_paths.push_back(app_dir);
     for (const auto& p : m_cfg.search_paths) effective_paths.push_back(p);
 
     TargetOs target_os = m_cfg.target_os;
@@ -954,9 +997,8 @@ void MainFrame::OnAddExcludedDir(wxCommandEvent&) {
     int added = 0;
     int skipped = 0;
     while (tokenizer.HasMoreTokens()) {
-        wxString token = tokenizer.GetNextToken().Trim(true).Trim(false);
+        wxString token = NormalizeExcludedDirToken(tokenizer.GetNextToken());
         if (token.IsEmpty()) continue;
-        token.MakeLower();
 
         std::string dir_name = token.ToStdString();
         if (std::find(m_cfg.extra_excluded_dirs.begin(), m_cfg.extra_excluded_dirs.end(), dir_name)
@@ -991,21 +1033,19 @@ void MainFrame::OnRemoveExcludedDir(wxCommandEvent&) {
     ConfigManager::Save(m_cfg);
 }
 
-void MainFrame::OnMoveExcludeUp(wxCommandEvent&) {
-    long sel = m_excluded_dirs_list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-    if (sel <= 0) return;
-    std::swap(m_cfg.extra_excluded_dirs[sel], m_cfg.extra_excluded_dirs[sel - 1]);
-    RefreshExcludedDirsList();
-    m_excluded_dirs_list->SetItemState(sel - 1, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
-    ConfigManager::Save(m_cfg);
-}
+void MainFrame::OnClearExcludedDirs(wxCommandEvent&) {
+    if (m_cfg.extra_excluded_dirs.empty()) return;
 
-void MainFrame::OnMoveExcludeDown(wxCommandEvent&) {
-    long sel = m_excluded_dirs_list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-    if (sel < 0 || sel >= (long)m_cfg.extra_excluded_dirs.size() - 1) return;
-    std::swap(m_cfg.extra_excluded_dirs[sel], m_cfg.extra_excluded_dirs[sel + 1]);
+    int choice = wxMessageBox(
+        _("Clear all excluded directories? This action cannot be undone."),
+        _("Confirm Clear"),
+        wxYES_NO | wxNO_DEFAULT | wxICON_WARNING,
+        this
+    );
+    if (choice != wxYES) return;
+
+    m_cfg.extra_excluded_dirs.clear();
     RefreshExcludedDirsList();
-    m_excluded_dirs_list->SetItemState(sel + 1, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
     ConfigManager::Save(m_cfg);
 }
 
@@ -1244,6 +1284,76 @@ void MainFrame::OnShowReport(wxCommandEvent&) {
     dlg.SetSizer(sizer);
     dlg.ShowModal();
 }
+
+void MainFrame::OnExcludedDirDropped(const wxString& text) {
+    wxString input(text);  // Create a copy
+    input.Trim(true).Trim(false);
+    if (input.IsEmpty()) return;
+    
+    wxStringTokenizer tokenizer(input, ",，");
+    int added = 0;
+    int skipped = 0;
+    
+    while (tokenizer.HasMoreTokens()) {
+        wxString token = NormalizeExcludedDirToken(tokenizer.GetNextToken());
+        if (token.IsEmpty()) continue;
+        
+        std::string dir_name = token.ToStdString();
+        if (std::find(m_cfg.extra_excluded_dirs.begin(),
+                      m_cfg.extra_excluded_dirs.end(),
+                      dir_name) != m_cfg.extra_excluded_dirs.end()) {
+            ++skipped;
+            continue;
+        }
+        
+        m_cfg.extra_excluded_dirs.push_back(dir_name);
+        ++added;
+    }
+    
+    if (added > 0) {
+        RefreshExcludedDirsList();
+        ConfigManager::Save(m_cfg);
+    }
+}
+
+void MainFrame::OnTreeBeginDrag(wxTreeEvent& evt) {
+    auto id = evt.GetItem();
+    if (!id.IsOk()) {
+        evt.Veto();
+        return;
+    }
+
+    wxTreeItemData* data = m_dep_tree->GetItemData(id);
+    if (!data) {
+        evt.Veto();
+        return;
+    }
+
+    auto* nd = dynamic_cast<NodeData*>(data);
+    if (!nd || !nd->node) {
+        evt.Veto();
+        return;
+    }
+
+    // Create a text data object with the DLL name (directory basename)
+    std::string dll_name = nd->node->name;
+    
+    // Extract directory name from DLL name (e.g., "msvcr120.dll" -> "msvcr120")
+    size_t dot_pos = dll_name.find_last_of('.');
+    if (dot_pos != std::string::npos) {
+        dll_name = dll_name.substr(0, dot_pos);
+    }
+    
+    wxString drag_text = wxString::FromUTF8(dll_name);
+    wxTextDataObject textData(drag_text);
+    wxDropSource source(textData, m_dep_tree);
+    
+    // Start the drag operation
+    source.DoDragDrop(wxDrag_DefaultMove);
+    
+    evt.Allow();
+}
+
 
 void MainFrame::OnClose(wxCloseEvent& evt) {
     ConfigManager::Save(m_cfg);

@@ -94,15 +94,15 @@ config/     JSON 配置管理
 所有 wxWidgets 构建依赖均已**内嵌**：
 
 ```text
-third_party/wxwidgets/
-third_party/zlib/
-third_party/minizip/
-third_party/nlohmann/
-runtime/
-tools/
+third_party/wxwidgets/   # wxWidgets UI 库
+third_party/zlib/        # 压缩库
+third_party/minizip/     # ZIP 打包
+third_party/nlohmann/    # JSON 解析
+runtime/                 # MinGW 运行库
+tools/nsis/              # NSIS 安装程序生成工具（完整打包）
 ```
 
-> ✅ 无需 vcpkg、无需网络、无需安装额外第三方库。
+> ✅ 无需 vcpkg、无需网络、无需安装 NSIS、无需额外第三方库。
 
 ```bat
 cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
@@ -149,10 +149,27 @@ cmake --build .\build_qt --config Release -j4
 **使用提示：**
 
 - 如果 DLL 不在可执行文件旁边，可在"搜索路径"中添加额外的搜索目录。
-- 启用"跟随系统 PATH"可在分析时搜索系统 `PATH` 变量。
+- **系统路径搜索** — 默认启用"跟随系统 PATH"，自动在 Windows 系统目录和 PATH 变量中搜索 DLL（如 System32 中的系统库）。可通过编辑 `libdeploy_config.json` 修改 `follow_system_path` 字段进行开关：
+  ```json
+  {
+    "follow_system_path": true,   // 启用系统 PATH 搜索（推荐 true）
+    ...
+  }
+  ```
+- **NSIS 工具配置** — NSIS 已**完全内嵌**在 `tools/nsis/` 中，构建时自动复制到发布目录。生成安装程序时会**自动优先使用内嵌版本**，无需系统安装 NSIS。不同开发环境**完全无需修改配置**，开箱即用。若要使用系统安装的 NSIS 或自定义路径，可在 `libdeploy_config.json` 中指定：
+  ```json
+  {
+    "nsis": {
+      "makensis_path": ""  // 空字符串 = 使用内嵌版本（推荐）
+      // 或指定系统路径：
+      // "makensis_path": "C:/Program Files (x86)/NSIS/makensis.exe"
+    }
+  }
+  ```
 - 只有看起来像应用资源的目录会被复制；`bin/`、`build/`、`Debug/`、`Release/`、`x64/`、`x86/` 等常见构建输出目录会自动跳过。
 - 可通过 `classifier.extra_excluded_dirs` 增加自定义资源扫描排除目录（目录名匹配不区分大小写），适合排除 Conda/Python 运行环境目录。
 - wxWidgets 前端的"排除目录"面板支持逗号批量输入（支持英文逗号`,` 和中文逗号`，`）。
+- 两套前端均支持将依赖树中的 DLL 项拖拽到"排除目录"面板，快速加入目录名（自动忽略大小写重复项）。
 - 使用"文件 → 最近文件"快速重新打开之前分析过的目标。
 - 打开"文件 → 历史日志"可浏览或导出任意历史分析会话日志。
 

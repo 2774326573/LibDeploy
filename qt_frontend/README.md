@@ -37,6 +37,7 @@ same directory so the app can start on machines without a developer environment.
 - Open EXE/DLL target
 - Analyze dependency tree
 - Search path management
+- Drag dependency items to Excluded Directories
 - Redist warning panel
 - Full report dialog
 - Deploy/copy dependencies

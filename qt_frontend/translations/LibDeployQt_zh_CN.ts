@@ -174,6 +174,10 @@ Qt frontend for dependency analysis and deployment.</source>
         <translation>搜索路径</translation>
     </message>
     <message>
+        <source>Excluded Directories</source>
+        <translation>排除目录</translation>
+    </message>
+    <message>
         <source>Add</source>
         <translation>添加</translation>
     </message>
@@ -192,6 +196,10 @@ Qt frontend for dependency analysis and deployment.</source>
     <message>
         <source>Tip: this app&apos;s folder is searched first; system PATH is controlled by config.</source>
         <translation>提示: 优先搜索本工具目录；是否搜索系统 PATH 由配置控制。</translation>
+    </message>
+    <message>
+        <source>Tip: use commas to add multiple directory names at once; matching is case-insensitive.</source>
+        <translation>提示: 可使用逗号一次添加多个目录名；匹配不区分大小写。</translation>
     </message>
     <message>
         <source>Redistributable Requirements:</source>
@@ -352,6 +360,22 @@ Bundled NSIS should be in nsis/ next to LibDeployQt.exe.</source>
     <message>
         <source>Select search path</source>
         <translation>选择搜索路径</translation>
+    </message>
+    <message>
+        <source>Add Excluded Directory</source>
+        <translation>添加排除目录</translation>
+    </message>
+    <message>
+        <source>Enter directory names to exclude, separated by commas:</source>
+        <translation>输入要排除的目录名（用逗号分隔）:</translation>
+    </message>
+    <message>
+        <source>No new directories were added (all already exist or invalid).</source>
+        <translation>没有新增目录（都已存在或无效）。</translation>
+    </message>
+    <message>
+        <source>Added %1 directories, skipped %2 duplicates.</source>
+        <translation>已添加 %1 个目录，跳过 %2 个重复项。</translation>
     </message>
     <message>
         <source>Name: </source>

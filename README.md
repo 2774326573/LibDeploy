@@ -94,15 +94,15 @@ Detailed build instructions are in [docs/BUILD.md](docs/BUILD.md).
 All wxWidgets build dependencies are **bundled**:
 
 ```text
-third_party/wxwidgets/
-third_party/zlib/
-third_party/minizip/
-third_party/nlohmann/
-runtime/
-tools/
+third_party/wxwidgets/   # wxWidgets UI library
+third_party/zlib/        # Compression support
+third_party/minizip/     # ZIP packaging
+third_party/nlohmann/    # JSON parsing
+runtime/                 # MinGW runtime DLLs
+tools/nsis/              # NSIS installer generator (fully bundled)
 ```
 
-> ✅ No vcpkg, network access, or additional third-party installation is required.
+> ✅ No vcpkg, network access, NSIS installation, or additional third-party libraries required.
 
 ```bat
 cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
@@ -149,10 +149,27 @@ cmake --build .\build_qt --config Release -j4
 **Tips:**
 
 - Add extra search paths under *Search Paths* if your DLLs are not next to the executable.
-- Enable *Follow System PATH* to search the system `PATH` variable during analysis.
+- **System PATH search** — *Follow System PATH* is enabled by default, which automatically searches Windows system directories and the PATH variable for DLLs (e.g., system libraries in System32). Toggle this via the `follow_system_path` field in `libdeploy_config.json`:
+  ```json
+  {
+    "follow_system_path": true,   // Enable system PATH search (recommended: true)
+    ...
+  }
+  ```
+- **NSIS tool configuration** — NSIS is **fully bundled** in `tools/nsis/` and is automatically copied to the release folder during build. When generating an installer, the application **automatically uses the bundled version first**, with no system NSIS installation required. Different development environments **require no configuration changes** and work out-of-the-box. To use a system-installed NSIS or custom path, specify it in `libdeploy_config.json`:
+  ```json
+  {
+    "nsis": {
+      "makensis_path": ""  // Empty string = use bundled version (recommended)
+      // Or specify system path:
+      // "makensis_path": "C:/Program Files (x86)/NSIS/makensis.exe"
+    }
+  }
+  ```
 - Resource folders are copied only when they look like real application assets; common build-output folders such as `bin/`, `build/`, `Debug/`, `Release/`, `x64/`, and `x86/` are skipped automatically.
 - You can add custom resource-scan exclusions via `classifier.extra_excluded_dirs` (case-insensitive directory names), useful for excluding Conda/Python runtime folders.
 - In the wxWidgets frontend, *Excluded Directories* supports bulk input using comma-separated names (both `,` and `，`).
+- In both frontends, you can drag a DLL item from the dependency tree into *Excluded Directories* to add its base name quickly (case-insensitive duplicate check applies).
 - Use *File → Recent Files* to quickly reopen previously analysed targets.
 - Open *File → History Logs* to browse or export any past analysis session log.
 

@@ -15,6 +15,9 @@
 #include <QComboBox>
 #include <QGroupBox>
 #include <QTranslator>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 
 #include "config/config_manager.h"
 #include "engine/dep_result.h"
@@ -23,12 +26,29 @@
 #include <unordered_map>
 #include <unordered_set>
 
+// Forward declarations
+class MainWindow;
+
+// Custom QListWidget to handle drag-drop for excluded directories
+class ExcludedDirsListWidget : public QListWidget {
+public:
+    explicit ExcludedDirsListWidget(MainWindow* parent = nullptr);
+
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
+
+private:
+    MainWindow* m_mainWindow = nullptr;
+};
+
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override = default;
+    void addExcludedDirFromDrag(const QString& text);
 
 private:
     struct AnalyzeResult {
@@ -60,6 +80,7 @@ private:
     QComboBox*      m_targetOs = nullptr;
     QTreeWidget*    m_tree = nullptr;
     QListWidget*    m_searchPaths = nullptr;
+    QListWidget*    m_excludedDirs = nullptr;
     QPlainTextEdit* m_log = nullptr;
     QGroupBox*      m_redistPanel = nullptr;
     QTextEdit*      m_redistText = nullptr;
@@ -73,6 +94,8 @@ private:
     QLabel*         m_noticeLabel = nullptr;
     QGroupBox*      m_detailGroup = nullptr;
     QGroupBox*      m_pathsGroup = nullptr;
+    QGroupBox*      m_excludedGroup = nullptr;
+    QLabel*         m_excludedTipLabel = nullptr;
 
     QMenu*          m_recentMenu = nullptr;
 
@@ -87,6 +110,9 @@ private:
     QPushButton*    m_removePathButton = nullptr;
     QPushButton*    m_upPathButton = nullptr;
     QPushButton*    m_downPathButton = nullptr;
+    QPushButton*    m_addExcludedButton = nullptr;
+    QPushButton*    m_removeExcludedButton = nullptr;
+    QPushButton*    m_clearExcludedButton = nullptr;
 
     AppConfig m_config;
     DepReport m_report;
@@ -129,6 +155,9 @@ private:
     void addSearchPath();
     void removeSearchPath();
     void moveSearchPath(int direction);
+    void addExcludedDir();
+    void removeExcludedDir();
+    void clearExcludedDirs();
 
     void startAnalyze(bool runQtDeployTool = false);
     void startDeploy(const QString& destDir);
@@ -140,6 +169,7 @@ private:
     void updateDetails(QTreeWidgetItem* item);
     void updateRedistPanel();
     void refreshSearchPaths();
+    void refreshExcludedDirs();
     void updateRecentMenu();
     void pushRecentTarget(const QString& path);
     void saveSessionLog();

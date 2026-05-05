@@ -41,6 +41,7 @@ namespace fs = std::filesystem;
 namespace {
 constexpr int NodePtrRole = Qt::UserRole + 1;
 
+
 QString appDir()
 {
     return QFileInfo(QCoreApplication::applicationFilePath()).absolutePath();
@@ -64,6 +65,72 @@ QString defaultDeployDir(const QString& exePath)
     QFileInfo info(exePath);
     return info.absoluteDir().absoluteFilePath(info.completeBaseName() + "_deploy");
 }
+
+QString normalizeExcludedDirToken(QString token)
+{
+    token = token.trimmed();
+    if (token.isEmpty()) return token;
+
+    // Strip display wrappers such as [name/] or [name]
+    if (token.startsWith('[')) token.remove(0, 1);
+    if (token.endsWith(']')) token.chop(1);
+
+    // Strip repeated-node suffix from tree labels
+    if (token.endsWith(" (...)")) token.chop(6);
+
+    // If a path-like token is dropped, keep only the last segment
+    int slash = token.lastIndexOf('/');
+    int backslash = token.lastIndexOf('\\');
+    int cut = std::max(slash, backslash);
+    if (cut >= 0) token = token.mid(cut + 1);
+
+    // Remove trailing slashes from directory-style display text
+    while (token.endsWith('/') || token.endsWith('\\')) {
+        token.chop(1);
+    }
+
+    token = token.trimmed().toLower();
+
+    // If a DLL name is dropped, keep its base name
+    if (token.endsWith(".dll")) token.chop(4);
+
+    return token.trimmed();
+}
+}
+
+// ExcludedDirsListWidget implementation
+ExcludedDirsListWidget::ExcludedDirsListWidget(MainWindow* parent)
+    : QListWidget(parent), m_mainWindow(parent) {
+    setAcceptDrops(true);
+    setDefaultDropAction(Qt::DropAction::MoveAction);
+}
+
+void ExcludedDirsListWidget::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData()->hasText()) {
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+}
+
+void ExcludedDirsListWidget::dropEvent(QDropEvent* event) {
+    if (!event->mimeData()->hasText()) {
+        event->ignore();
+        return;
+    }
+    
+    QString text = event->mimeData()->text();
+    if (text.isEmpty()) {
+        event->ignore();
+        return;
+    }
+    
+    if (m_mainWindow) {
+        m_mainWindow->addExcludedDirFromDrag(text);
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
 }
 
 MainWindow::MainWindow(QWidget* parent)
@@ -271,6 +338,8 @@ void MainWindow::buildUi()
     m_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     m_tree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_tree->setDragDropMode(QAbstractItemView::DragOnly);  // Enable drag from tree
+    m_tree->setDefaultDropAction(Qt::DropAction::MoveAction);
     connect(m_tree, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* item) {
         updateDetails(item);
     });
@@ -313,6 +382,26 @@ void MainWindow::buildUi()
     pathLayout->addWidget(m_tipLabel);
     side->addWidget(m_pathsGroup);
 
+    m_excludedGroup = new QGroupBox;
+    QVBoxLayout* excludedLayout = new QVBoxLayout(m_excludedGroup);
+    m_excludedDirs = new ExcludedDirsListWidget(this);
+    excludedLayout->addWidget(m_excludedDirs);
+    QHBoxLayout* excludedButtons = new QHBoxLayout;
+    m_addExcludedButton = new QPushButton;
+    m_removeExcludedButton = new QPushButton;
+    m_clearExcludedButton = new QPushButton;
+    connect(m_addExcludedButton, &QPushButton::clicked, this, &MainWindow::addExcludedDir);
+    connect(m_removeExcludedButton, &QPushButton::clicked, this, &MainWindow::removeExcludedDir);
+    connect(m_clearExcludedButton, &QPushButton::clicked, this, &MainWindow::clearExcludedDirs);
+    excludedButtons->addWidget(m_addExcludedButton);
+    excludedButtons->addWidget(m_removeExcludedButton);
+    excludedButtons->addWidget(m_clearExcludedButton);
+    excludedLayout->addLayout(excludedButtons);
+    m_excludedTipLabel = new QLabel;
+    m_excludedTipLabel->setWordWrap(true);
+    excludedLayout->addWidget(m_excludedTipLabel);
+    side->addWidget(m_excludedGroup);
+
     m_redistPanel = new QGroupBox;
     QVBoxLayout* redistLayout = new QVBoxLayout(m_redistPanel);
     m_redistText = new QTextEdit;
@@ -341,6 +430,7 @@ void MainWindow::buildUi()
 
     setCentralWidget(central);
     refreshSearchPaths();
+    refreshExcludedDirs();
 }
 
 void MainWindow::loadConfig()
@@ -508,6 +598,11 @@ void MainWindow::retranslateUi()
     if (m_upPathButton) m_upPathButton->setText(tr("Up"));
     if (m_downPathButton) m_downPathButton->setText(tr("Down"));
     if (m_tipLabel) m_tipLabel->setText(tr("Tip: this app's folder is searched first; system PATH is controlled by config."));
+    if (m_excludedGroup) m_excludedGroup->setTitle(tr("Excluded Directories"));
+    if (m_addExcludedButton) m_addExcludedButton->setText(tr("Add"));
+    if (m_removeExcludedButton) m_removeExcludedButton->setText(tr("Del"));
+    if (m_clearExcludedButton) m_clearExcludedButton->setText(tr("Clear"));
+    if (m_excludedTipLabel) m_excludedTipLabel->setText(tr("Tip: use commas to add multiple directory names at once; matching is case-insensitive."));
     if (m_redistPanel) m_redistPanel->setTitle(tr("Redistributable Requirements:"));
     if (m_logLabel) m_logLabel->setText(tr("Log:"));
     if (statusBar()->currentMessage().isEmpty()) statusBar()->showMessage(tr("Ready"));
@@ -559,7 +654,6 @@ void MainWindow::startAnalyze(bool runQtDeployTool)
     m_analyzeWatcher.setFuture(QtConcurrent::run([cfg, exePath, runQtDeployTool]() {
         AnalyzeResult result;
         std::vector<std::string> paths;
-        paths.push_back(str(appDir()));
         for (const auto& p : cfg.search_paths) paths.push_back(p);
 
         std::vector<std::string> resourcePaths = cfg.search_paths;
@@ -777,6 +871,115 @@ void MainWindow::moveSearchPath(int direction)
     saveConfig();
 }
 
+void MainWindow::addExcludedDir()
+{
+    bool ok = false;
+    QString input = QInputDialog::getText(
+        this,
+        tr("Add Excluded Directory"),
+        tr("Enter directory names to exclude, separated by commas:"),
+        QLineEdit::Normal,
+        QString(),
+        &ok
+    );
+    if (!ok) return;
+
+    input = input.trimmed();
+    if (input.isEmpty()) return;
+    input.replace(QChar(0xFF0C), ',');
+
+    std::unordered_set<std::string> existing;
+    for (const auto& dir : m_config.extra_excluded_dirs)
+        existing.insert(str(qstr(dir).trimmed().toLower()));
+
+    int added = 0;
+    int skipped = 0;
+    const QStringList parts = input.split(',', QString::SkipEmptyParts);
+    for (const QString& part : parts) {
+        const QString token = normalizeExcludedDirToken(part);
+        if (token.isEmpty()) continue;
+        std::string key = str(token);
+        if (!existing.insert(key).second) {
+            ++skipped;
+            continue;
+        }
+        m_config.extra_excluded_dirs.push_back(key);
+        ++added;
+    }
+
+    if (added == 0) {
+        QMessageBox::information(this, tr("LibDeployQt"),
+                                 tr("No new directories were added (all already exist or invalid)."));
+        return;
+    }
+
+    refreshExcludedDirs();
+    saveConfig();
+    statusBar()->showMessage(tr("Added %1 directories, skipped %2 duplicates.").arg(added).arg(skipped), 8000);
+}
+
+void MainWindow::removeExcludedDir()
+{
+    if (!m_excludedDirs) return;
+    int row = m_excludedDirs->currentRow();
+    if (row < 0 || row >= static_cast<int>(m_config.extra_excluded_dirs.size())) return;
+    m_config.extra_excluded_dirs.erase(m_config.extra_excluded_dirs.begin() + row);
+    refreshExcludedDirs();
+    saveConfig();
+}
+
+void MainWindow::clearExcludedDirs()
+{
+    if (m_config.extra_excluded_dirs.empty()) return;
+
+    const int answer = QMessageBox::question(
+        this,
+        tr("Confirm Clear"),
+        tr("Clear all excluded directories? This action cannot be undone."),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No
+    );
+    if (answer != QMessageBox::Yes) return;
+
+    m_config.extra_excluded_dirs.clear();
+    refreshExcludedDirs();
+    saveConfig();
+}
+
+void MainWindow::addExcludedDirFromDrag(const QString& text)
+{
+    QString input = text.trimmed();
+    if (input.isEmpty()) return;
+    input.replace(QChar(0xFF0C), ',');
+
+    std::unordered_set<std::string> existing;
+    for (const auto& dir : m_config.extra_excluded_dirs)
+        existing.insert(str(qstr(dir).trimmed().toLower()));
+
+    int added = 0;
+    int skipped = 0;
+    const QStringList parts = input.split(',', QString::SkipEmptyParts);
+    for (const QString& part : parts) {
+        const QString token = normalizeExcludedDirToken(part);
+        if (token.isEmpty()) continue;
+        std::string key = str(token);
+        if (!existing.insert(key).second) {
+            ++skipped;
+            continue;
+        }
+        m_config.extra_excluded_dirs.push_back(key);
+        ++added;
+    }
+
+    if (added > 0) {
+        refreshExcludedDirs();
+        saveConfig();
+        if (skipped > 0) {
+            statusBar()->showMessage(tr("Added %1 directories, skipped %2 duplicates.").arg(added).arg(skipped), 8000);
+        }
+    }
+}
+
 void MainWindow::populateTree()
 {
     m_tree->clear();
@@ -844,6 +1047,13 @@ void MainWindow::refreshSearchPaths()
     if (!m_searchPaths) return;
     m_searchPaths->clear();
     for (const auto& p : m_config.search_paths) m_searchPaths->addItem(qstr(p));
+}
+
+void MainWindow::refreshExcludedDirs()
+{
+    if (!m_excludedDirs) return;
+    m_excludedDirs->clear();
+    for (const auto& p : m_config.extra_excluded_dirs) m_excludedDirs->addItem(qstr(p));
 }
 
 void MainWindow::setBusy(bool busy, const QString& title, const QString& text, int maxValue)

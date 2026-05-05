@@ -6,11 +6,13 @@
 struct AppConfig {
     std::vector<std::string> search_paths;
     TargetOs    target_os          = TargetOs::Win10;
-    bool        follow_system_path = false; // 默认关闭，避免混入开发机特有路径
+    bool        follow_system_path = true; // 启用系统 PATH 搜索，找到 System32 中的系统 DLL（如 ucrtbase.dll、api-ms-win-crt-*）
     bool        copy_redist_dlls   = true;
     bool        bundle_redist_installer = false;
     std::string last_target;
-    std::string makensis_path = "C:/Program Files (x86)/NSIS/makensis.exe";
+    // makensis_path: NSIS 工具路径。默认为空 ""，会自动查找内嵌版本 tools/nsis/Bin/makensis.exe;
+    // 如需使用系统安装的 NSIS，设置为系统路径（如 "C:/Program Files (x86)/NSIS/makensis.exe"）
+    std::string makensis_path = "";
     std::string redist_cache_dir;
 
     std::string ui_language = ""; // "" = auto-detect from system, "en_US", "zh_CN"

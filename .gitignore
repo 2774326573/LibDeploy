@@ -48,6 +48,9 @@ Testing/
 *.nsi
 *.nsis
 *.zip
+
+# BUT: Include bundled NSIS tools for reproducible builds
+!tools/nsis/**
 *.7z
 *.rar
 *.tar

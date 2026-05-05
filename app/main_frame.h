@@ -3,9 +3,20 @@
 #include <wx/treectrl.h>
 #include <wx/listctrl.h>
 #include <wx/splitter.h>
+#include <wx/dnd.h>
 #include "engine/dep_result.h"
 #include "engine/dep_resolver.h"
 #include "config/config_manager.h"
+
+// Custom drop target for excluded directories list
+class ExcludedDirsDropTarget : public wxTextDropTarget {
+public:
+    explicit ExcludedDirsDropTarget(class MainFrame* frame);
+    bool OnDropText(wxCoord x, wxCoord y, const wxString& text) override;
+
+private:
+    MainFrame* m_frame = nullptr;
+};
 
 class MainFrame : public wxFrame {
 public:
@@ -62,10 +73,16 @@ private:
     void OnMoveDown(wxCommandEvent&);
     void OnAddExcludedDir(wxCommandEvent&);
     void OnRemoveExcludedDir(wxCommandEvent&);
-    void OnMoveExcludeUp(wxCommandEvent&);
-    void OnMoveExcludeDown(wxCommandEvent&);
+    void OnClearExcludedDirs(wxCommandEvent&);
     void OnTreeSelChanged(wxTreeEvent&);
+    void OnTreeBeginDrag(wxTreeEvent&);
     void OnClose(wxCloseEvent&);
+
+public:
+    // Public method for drag-drop support
+    void OnExcludedDirDropped(const wxString& text);
+
+private:
     void OnExportLog(wxCommandEvent&);
     void OnHistoryLogs(wxCommandEvent&);
 
