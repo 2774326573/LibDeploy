@@ -80,6 +80,8 @@ AppConfig ConfigManager::Load(const std::string& path) {
             }
             if (c.contains("user_excluded"))
                 cfg.user_excluded = c["user_excluded"].get<std::vector<std::string>>();
+            if (c.contains("extra_excluded_dirs"))
+                cfg.extra_excluded_dirs = c["extra_excluded_dirs"].get<std::vector<std::string>>();
         }
 
         if (j.contains("qt_deploy_tool"))
@@ -127,8 +129,9 @@ bool ConfigManager::Save(const AppConfig& cfg, const std::string& path) {
             j["recent_targets"] = arr;
         }
 
-        j["classifier"]["extra_os_core"]  = cfg.extra_os_core;
-        j["classifier"]["user_excluded"]  = cfg.user_excluded;
+        j["classifier"]["extra_os_core"]     = cfg.extra_os_core;
+        j["classifier"]["user_excluded"]     = cfg.user_excluded;
+        j["classifier"]["extra_excluded_dirs"] = cfg.extra_excluded_dirs;
         json redist_arr = json::array();
         for (const auto& r : cfg.extra_redist) {
             redist_arr.push_back({

@@ -493,6 +493,7 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
             if (name[0] == '.') return true;
             std::string lower_name = ToLower(name);
             if (kSkipDirs.count(lower_name)) return true;
+            if (m_extra_excluded_dirs.count(lower_name)) return true;
             return lower_name.size() > 7 && lower_name.substr(lower_name.size() - 7) == "_deploy";
         };
 

@@ -18,6 +18,7 @@
 #include <wx/progdlg.h>
 #include <unordered_set>
 #include <unordered_map>
+#include <algorithm>
 #include <filesystem>
 #include <chrono>
 #include <iomanip>
@@ -40,6 +41,10 @@ enum {
     ID_REMOVE_PATH,
     ID_MOVE_UP,
     ID_MOVE_DOWN,
+    ID_ADD_EXCLUDE_DIR,
+    ID_REMOVE_EXCLUDE_DIR,
+    ID_MOVE_EXCLUDE_UP,
+    ID_MOVE_EXCLUDE_DOWN,
     ID_LANG_EN,
     ID_LANG_ZH,
     ID_THEME_SYSTEM,
@@ -105,6 +110,10 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_BUTTON(ID_REMOVE_PATH,    MainFrame::OnRemoveSearchPath)
     EVT_BUTTON(ID_MOVE_UP,        MainFrame::OnMoveUp)
     EVT_BUTTON(ID_MOVE_DOWN,      MainFrame::OnMoveDown)
+    EVT_BUTTON(ID_ADD_EXCLUDE_DIR,    MainFrame::OnAddExcludedDir)
+    EVT_BUTTON(ID_REMOVE_EXCLUDE_DIR, MainFrame::OnRemoveExcludedDir)
+    EVT_BUTTON(ID_MOVE_EXCLUDE_UP,    MainFrame::OnMoveExcludeUp)
+    EVT_BUTTON(ID_MOVE_EXCLUDE_DOWN,  MainFrame::OnMoveExcludeDown)
     EVT_TREE_SEL_CHANGED(wxID_ANY, MainFrame::OnTreeSelChanged)
     EVT_CLOSE(MainFrame::OnClose)
     EVT_MENU(ID_EXPORT_LOG,    MainFrame::OnExportLog)
@@ -284,6 +293,25 @@ void MainFrame::BuildUI() {
         0, wxTOP, 4);
     right_vbox->Add(path_box, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
 
+    // Excluded directories (resource scan exclusions)
+    auto* exclude_box = new wxStaticBoxSizer(wxVERTICAL, right_panel, _("Excluded Directories"));
+    m_excluded_dirs_list = new wxListCtrl(right_panel, wxID_ANY, wxDefaultPosition,
+                                          wxSize(-1, 100), wxLC_LIST | wxBORDER_SUNKEN);
+    RefreshExcludedDirsList();
+    exclude_box->Add(m_excluded_dirs_list, 1, wxEXPAND | wxBOTTOM, 2);
+
+    auto* exclude_btn_row = new wxBoxSizer(wxHORIZONTAL);
+    exclude_btn_row->Add(new wxButton(right_panel, ID_ADD_EXCLUDE_DIR,    _("Add"),  wxDefaultPosition, wxSize(60,-1)), 0, wxRIGHT, 2);
+    exclude_btn_row->Add(new wxButton(right_panel, ID_REMOVE_EXCLUDE_DIR, _("Del"),  wxDefaultPosition, wxSize(60,-1)), 0, wxRIGHT, 2);
+    exclude_btn_row->Add(new wxButton(right_panel, ID_MOVE_EXCLUDE_UP,    _("Up"),   wxDefaultPosition, wxSize(60,-1)), 0, wxRIGHT, 2);
+    exclude_btn_row->Add(new wxButton(right_panel, ID_MOVE_EXCLUDE_DOWN,  _("Down"), wxDefaultPosition, wxSize(60,-1)));
+    exclude_box->Add(exclude_btn_row, 0, wxEXPAND | wxTOP, 2);
+
+    exclude_box->Add(new wxStaticText(right_panel, wxID_ANY,
+        _("Tip: use commas to add multiple directory names at once; matching is case-insensitive.")),
+        0, wxTOP, 4);
+    right_vbox->Add(exclude_box, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
+
     // Redist warning panel (hidden until analysis)
     m_redist_warn = new wxPanel(right_panel);
     m_redist_warn->SetBackgroundColour(wxColour(255, 240, 180));
@@ -348,6 +376,13 @@ void MainFrame::RefreshSearchList() {
     m_search_list->DeleteAllItems();
     for (int i = 0; i < (int)m_cfg.search_paths.size(); ++i)
         m_search_list->InsertItem(i, m_cfg.search_paths[i]);
+}
+
+void MainFrame::RefreshExcludedDirsList() {
+    if (!m_excluded_dirs_list) return;
+    m_excluded_dirs_list->DeleteAllItems();
+    for (int i = 0; i < (int)m_cfg.extra_excluded_dirs.size(); ++i)
+        m_excluded_dirs_list->InsertItem(i, m_cfg.extra_excluded_dirs[i]);
 }
 
 void MainFrame::SwitchTheme(const std::string& theme) {
@@ -485,6 +520,7 @@ void MainFrame::RunAnalyzeAsync(const wxString& path) {
     std::vector<std::string>           extra_os_core   = m_cfg.extra_os_core;
     std::vector<AppConfig::RedistRule> extra_redist    = m_cfg.extra_redist;
     std::vector<std::string>           user_excluded   = m_cfg.user_excluded;
+    std::vector<std::string>           extra_excluded_dirs = m_cfg.extra_excluded_dirs;
 
     // 进度对话框：Pulse 模式（分析阶段无法精确知道百分比）
     auto* dlg = new wxProgressDialog(
@@ -495,7 +531,7 @@ void MainFrame::RunAnalyzeAsync(const wxString& path) {
     // 后台线程：构造 resolver 并执行 Resolve（含 DirScan 建索引）
     std::thread worker([state, path_str, effective_paths,
                         resource_scan_paths, target_os,
-                        follow_system_path, extra_os_core, extra_redist, user_excluded]() {
+                        follow_system_path, extra_os_core, extra_redist, user_excluded, extra_excluded_dirs]() {
         DepResolver resolver(
             target_os,
             effective_paths,
@@ -513,6 +549,8 @@ void MainFrame::RunAnalyzeAsync(const wxString& path) {
             resolver.AddRedistRule(r.prefix, r.package, r.always_deploy);
         if (!user_excluded.empty())
             resolver.SetUserExcluded(user_excluded);
+        if (!extra_excluded_dirs.empty())
+            resolver.SetExtraExcludedDirs(extra_excluded_dirs);
         state->report = resolver.Resolve(path_str);
         std::lock_guard<std::mutex> lk(state->mtx);
         state->done = true;
@@ -901,6 +939,74 @@ void MainFrame::OnMoveDown(wxCommandEvent&) {
     std::swap(m_cfg.search_paths[sel], m_cfg.search_paths[sel + 1]);
     RefreshSearchList();
     m_search_list->SetItemState(sel + 1, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+}
+
+void MainFrame::OnAddExcludedDir(wxCommandEvent&) {
+    wxTextEntryDialog dlg(this,
+                          _("Enter directory names to exclude, separated by commas:"),
+                          _("Add Excluded Directory"));
+    if (dlg.ShowModal() == wxID_CANCEL) return;
+
+    wxString input = dlg.GetValue();
+    if (input.Trim(true).Trim(false).IsEmpty()) return;
+
+    wxStringTokenizer tokenizer(input, ",，");
+    int added = 0;
+    int skipped = 0;
+    while (tokenizer.HasMoreTokens()) {
+        wxString token = tokenizer.GetNextToken().Trim(true).Trim(false);
+        if (token.IsEmpty()) continue;
+        token.MakeLower();
+
+        std::string dir_name = token.ToStdString();
+        if (std::find(m_cfg.extra_excluded_dirs.begin(), m_cfg.extra_excluded_dirs.end(), dir_name)
+            != m_cfg.extra_excluded_dirs.end()) {
+            ++skipped;
+            continue;
+        }
+        m_cfg.extra_excluded_dirs.push_back(dir_name);
+        ++added;
+    }
+
+    if (added == 0) {
+        wxMessageBox(_("No new directories were added (all already exist or invalid)."),
+                     _("LibDeploy"), wxOK | wxICON_WARNING);
+        return;
+    }
+
+    RefreshExcludedDirsList();
+    ConfigManager::Save(m_cfg);
+
+    if (skipped > 0) {
+        wxMessageBox(wxString::Format(_("Added %d directories, skipped %d duplicates."), added, skipped),
+                     _("LibDeploy"), wxOK | wxICON_INFORMATION);
+    }
+}
+
+void MainFrame::OnRemoveExcludedDir(wxCommandEvent&) {
+    long sel = m_excluded_dirs_list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (sel < 0) return;
+    m_cfg.extra_excluded_dirs.erase(m_cfg.extra_excluded_dirs.begin() + sel);
+    RefreshExcludedDirsList();
+    ConfigManager::Save(m_cfg);
+}
+
+void MainFrame::OnMoveExcludeUp(wxCommandEvent&) {
+    long sel = m_excluded_dirs_list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (sel <= 0) return;
+    std::swap(m_cfg.extra_excluded_dirs[sel], m_cfg.extra_excluded_dirs[sel - 1]);
+    RefreshExcludedDirsList();
+    m_excluded_dirs_list->SetItemState(sel - 1, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+    ConfigManager::Save(m_cfg);
+}
+
+void MainFrame::OnMoveExcludeDown(wxCommandEvent&) {
+    long sel = m_excluded_dirs_list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (sel < 0 || sel >= (long)m_cfg.extra_excluded_dirs.size() - 1) return;
+    std::swap(m_cfg.extra_excluded_dirs[sel], m_cfg.extra_excluded_dirs[sel + 1]);
+    RefreshExcludedDirsList();
+    m_excluded_dirs_list->SetItemState(sel + 1, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+    ConfigManager::Save(m_cfg);
 }
 
 void MainFrame::OnTreeSelChanged(wxTreeEvent& evt) {

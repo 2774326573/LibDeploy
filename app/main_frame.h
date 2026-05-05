@@ -17,6 +17,7 @@ private:
     wxChoice*     m_target_os   = nullptr;
     wxTreeCtrl*   m_dep_tree    = nullptr;
     wxListCtrl*   m_search_list = nullptr;
+    wxListCtrl*   m_excluded_dirs_list = nullptr;
     wxTextCtrl*   m_log         = nullptr;
     wxPanel*      m_redist_warn = nullptr;
     wxPanel*      m_root_panel  = nullptr;
@@ -59,12 +60,17 @@ private:
     void OnRemoveSearchPath(wxCommandEvent&);
     void OnMoveUp(wxCommandEvent&);
     void OnMoveDown(wxCommandEvent&);
+    void OnAddExcludedDir(wxCommandEvent&);
+    void OnRemoveExcludedDir(wxCommandEvent&);
+    void OnMoveExcludeUp(wxCommandEvent&);
+    void OnMoveExcludeDown(wxCommandEvent&);
     void OnTreeSelChanged(wxTreeEvent&);
     void OnClose(wxCloseEvent&);
     void OnExportLog(wxCommandEvent&);
     void OnHistoryLogs(wxCommandEvent&);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+    void RefreshExcludedDirsList();
     void PopulateTree(const DepReport& report);
     void PopulateTreeNode(wxTreeItemId parent_id,
                           const DepNode& node,

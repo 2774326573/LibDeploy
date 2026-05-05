@@ -46,6 +46,35 @@ build/bin/
 > `MinSizeRel/`、`x64/`、`x86/`、`Win32/`、`Win64/` 和 `*_deploy/`。
 > 这些目录不会被当作应用资源复制到部署目录、ZIP 或安装包中。
 
+### 资源扫描排除目录（可配置）
+
+除内置跳过目录外，用户还可以通过配置追加排除规则：
+
+- 配置项：`classifier.extra_excluded_dirs`
+- 作用：按目录名排除资源扫描（不区分大小写）
+- 典型用途：避免将 Conda / Python 环境目录误识别为项目资源
+
+示例：
+
+```json
+{
+      "classifier": {
+            "extra_excluded_dirs": [
+                  "conda-meta",
+                  "envs",
+                  "dlls",
+                  "library",
+                  "scripts",
+                  "include",
+                  "lib"
+            ]
+      }
+}
+```
+
+wxWidgets 前端已提供 **Excluded Directories** 面板，支持一次输入多个目录名（用英文逗号或中文逗号分隔）。
+Qt 前端会读取同一配置项并在分析时生效。
+
 ## Qt 前端构建
 
 Qt 版前端位于 `qt_frontend/`，复用同一套 `engine/`、`config/`、`third_party/`

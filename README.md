@@ -151,6 +151,8 @@ cmake --build .\build_qt --config Release -j4
 - Add extra search paths under *Search Paths* if your DLLs are not next to the executable.
 - Enable *Follow System PATH* to search the system `PATH` variable during analysis.
 - Resource folders are copied only when they look like real application assets; common build-output folders such as `bin/`, `build/`, `Debug/`, `Release/`, `x64/`, and `x86/` are skipped automatically.
+- You can add custom resource-scan exclusions via `classifier.extra_excluded_dirs` (case-insensitive directory names), useful for excluding Conda/Python runtime folders.
+- In the wxWidgets frontend, *Excluded Directories* supports bulk input using comma-separated names (both `,` and `，`).
 - Use *File → Recent Files* to quickly reopen previously analysed targets.
 - Open *File → History Logs* to browse or export any past analysis session log.
 

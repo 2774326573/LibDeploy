@@ -33,6 +33,9 @@ public:
     void SetUserExcluded(const std::vector<std::string>& names) {
         m_user_excluded.insert(names.begin(), names.end());
     }
+    void SetExtraExcludedDirs(const std::vector<std::string>& dirs) {
+        m_extra_excluded_dirs.insert(dirs.begin(), dirs.end());
+    }
 
     // 显式指定 windeployqt / linuxdeployqt 路径（空串 = 自动查找）
     void SetQtDeployTool(const std::string& tool_path) {
@@ -48,6 +51,7 @@ private:
     std::vector<std::string>   m_search_paths;
     std::vector<std::string>   m_resource_scan_paths;
     std::unordered_set<std::string> m_user_excluded;
+    std::unordered_set<std::string> m_extra_excluded_dirs;
     bool                       m_follow_system;
     bool                       m_run_qt_deploy = false;
     std::string                m_qt_deploy_tool;       // 空 = 自动查找

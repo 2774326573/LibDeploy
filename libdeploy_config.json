@@ -2,7 +2,16 @@
   "classifier": {
     "extra_os_core": [],
     "extra_redist": [],
-    "user_excluded": []
+    "user_excluded": [],
+    "extra_excluded_dirs": [
+      "conda-meta",
+      "envs",
+      "DLLs",
+      "Library",
+      "Scripts",
+      "Include",
+      "Lib"
+    ]
   },
   "deploy": {
     "bundle_redist_installer": false,

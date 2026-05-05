@@ -572,6 +572,7 @@ void MainWindow::startAnalyze(bool runQtDeployTool)
         for (const auto& rule : cfg.extra_redist)
             resolver.AddRedistRule(rule.prefix, rule.package, rule.always_deploy);
         if (!cfg.user_excluded.empty()) resolver.SetUserExcluded(cfg.user_excluded);
+        if (!cfg.extra_excluded_dirs.empty()) resolver.SetExtraExcludedDirs(cfg.extra_excluded_dirs);
         if (!cfg.qt_deploy_tool.empty()) resolver.SetQtDeployTool(cfg.qt_deploy_tool);
         resolver.SetRunQtDeployTool(runQtDeployTool);
 
