@@ -400,7 +400,8 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
 
     // ── Phase 0：扫描 exe 目录，补充 PE 导入表扫描不到的文件 ──────────────────
     // 动态加载的 PE（.pyd Python 扩展、.dll 插件）→ 纳入 BFS 分析依赖
-    // 数据文件（.zip .pth .db .lic .ini .json 等）      → 记入 data_files
+    // 数据文件（.zip .pth .db .lic .ini .json .sig 等）→ 记入 data_files
+    // 关键文件（部署清单 *.json/.sig、Python 模块 *.pyd）必须随包部署
     {
         std::error_code ec0;
         for (const auto& entry : fs::directory_iterator(exe_dir, ec0)) {
@@ -435,8 +436,13 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
                 // 进入 BFS 队列，分析其自身的依赖
                 queue.push({entry.path().string(), node.get()});
                 Log("[ExeDir/PE] " + lower);
+            } else if (ext == ".json" || ext == ".sig") {
+                // 关键配置文件：release_manifest.json/.sig、plugin manifest 等
+                // 这些文件必须随应用部署，不做 PE 分析
+                report.data_files.push_back(entry.path().string());
+                Log("[ExeDir/Manifest] " + fname);
             } else {
-                // 数据文件：直接记录，不做 PE 分析
+                // 其他数据文件：直接记录，不做 PE 分析
                 report.data_files.push_back(entry.path().string());
                 Log("[ExeDir/Data] " + fname);
             }
