@@ -381,6 +381,7 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
     // BFS
     std::unordered_map<std::string, std::shared_ptr<DepNode>> visited; // lower-name → node
     std::unordered_set<std::string> analyzed_files; // normalized path → already queued/scanned
+    std::unordered_set<std::string> seen_data_files; // normalized path → data_files entry
     std::unordered_set<std::string> redist_packages_seen;
 
     struct WorkItem {
@@ -398,6 +399,33 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
         ".log", ".tmp", ".bak",
     };
 
+    auto add_data_file = [&](const fs::path& file_path,
+                             const std::string& display_name,
+                             const std::string& log_tag) {
+        std::error_code ec;
+        if (!fs::is_regular_file(file_path, ec)) return;
+
+        std::string key = PathKey(file_path);
+        if (!seen_data_files.insert(key).second) return;
+
+        std::string name = display_name.empty()
+            ? file_path.filename().string()
+            : display_name;
+        std::string path = file_path.string();
+        report.data_files.push_back(path);
+
+        auto node = std::make_shared<DepNode>();
+        node->name          = name;
+        node->resolved_path = path;
+        node->category      = DllCategory::ThirdParty;
+        node->status        = DepStatus::Found;
+        node->need_deploy   = false;
+        report.node_pool.push_back(node);
+        root->children.push_back(node);
+
+        Log(log_tag + " " + name);
+    };
+
     // ── Phase 0：扫描 exe 目录，补充 PE 导入表扫描不到的文件 ──────────────────
     // 动态加载的 PE（.pyd Python 扩展、.dll 插件）→ 纳入 BFS 分析依赖
     // 数据文件（.zip .pth .db .lic .ini .json .sig 等）→ 记入 data_files
@@ -405,7 +433,8 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
     {
         std::error_code ec0;
         for (const auto& entry : fs::directory_iterator(exe_dir, ec0)) {
-            if (!entry.is_regular_file()) continue;
+            std::error_code ec_entry;
+            if (!entry.is_regular_file(ec_entry)) continue;
             // 跳过 exe 自身
             if (fs::equivalent(entry.path(), fs::path(target_exe), ec0)) continue;
 
@@ -439,12 +468,10 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
             } else if (ext == ".json" || ext == ".sig") {
                 // 关键配置文件：release_manifest.json/.sig、plugin manifest 等
                 // 这些文件必须随应用部署，不做 PE 分析
-                report.data_files.push_back(entry.path().string());
-                Log("[ExeDir/Manifest] " + fname);
+                add_data_file(entry.path(), fname, "[ExeDir/Manifest]");
             } else {
                 // 其他数据文件：直接记录，不做 PE 分析
-                report.data_files.push_back(entry.path().string());
-                Log("[ExeDir/Data] " + fname);
+                add_data_file(entry.path(), fname, "[ExeDir/Data]");
             }
         }
     }
@@ -486,9 +513,10 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
         static const std::unordered_set<std::string> kResourceFileExt = {
             ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".ico", ".svg", ".webp",
             ".py", ".pyw", ".pyi", ".js", ".mjs", ".css", ".html", ".htm",
-            ".json", ".xml", ".yaml", ".yml", ".ini", ".cfg", ".conf", ".toml",
-            ".txt", ".md", ".rst", ".csv", ".db", ".sqlite", ".lic", ".dat",
-            ".zip", ".pth", ".ttf", ".otf", ".woff", ".woff2", ".qm",
+            ".json", ".xml", ".yaml", ".yml", ".ini", ".cfg", ".conf", ".config", ".toml",
+            ".txt", ".md", ".rst", ".csv", ".db", ".sqlite", ".lic", ".license", ".dat",
+            ".zip", ".pth", ".ttf", ".otf", ".woff", ".woff2", ".qm", ".manifest",
+            ".pak", ".bin", ".pem", ".crt", ".cer", ".key",
         };
 
     std::unordered_set<std::string> seen_resource_dirs;
@@ -497,21 +525,21 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
     auto is_skipped_dir_name = [&](const std::string& name) {
             if (name.empty()) return true;
             if (name[0] == '.') return true;
-            std::string lower_name = ToLower(name);
-            if (kSkipDirs.count(lower_name)) return true;
-            if (m_extra_excluded_dirs.count(lower_name)) return true;
-            return lower_name.size() > 7 && lower_name.substr(lower_name.size() - 7) == "_deploy";
+            if (kSkipDirs.count(name)) return true;
+            if (m_extra_excluded_dirs.count(name)) return true;
+            return name.size() > 7 && name.substr(name.size() - 7) == "_deploy";
         };
 
     auto is_binary_container_dir_name = [&](const std::string& name) {
-            return kBinaryContainerDirNames.count(ToLower(name)) > 0;
+            return kBinaryContainerDirNames.count(name) > 0;
         };
 
     auto has_direct_resource_file = [&](const fs::path& dir) {
             std::error_code ec;
             if (!fs::exists(dir, ec)) return false;
             for (const auto& entry : fs::directory_iterator(dir, ec)) {
-                if (!entry.is_regular_file()) continue;
+                std::error_code ec_entry;
+                if (!entry.is_regular_file(ec_entry)) continue;
                 std::string ext = ToLower(entry.path().extension().string());
                 if (ext == ".dll" || ext == ".pyd" || ext == ".exe") continue;
                 if (kSkipExt.count(ext)) continue;
@@ -524,11 +552,15 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
             std::error_code ec;
             if (!fs::exists(dir, ec)) return false;
 
-            fs::recursive_directory_iterator it(dir, ec), end;
+            fs::recursive_directory_iterator it(
+                dir,
+                fs::directory_options::skip_permission_denied,
+                ec), end;
             while (!ec && it != end) {
                 if (it.depth() >= max_depth) it.disable_recursion_pending();
 
-                if (it->is_regular_file()) {
+                std::error_code ec_entry;
+                if (it->is_regular_file(ec_entry)) {
                     std::string ext = ToLower(it->path().extension().string());
                     if (ext != ".dll" && ext != ".pyd" && ext != ".exe" &&
                         !kSkipExt.count(ext) && kResourceFileExt.count(ext))
@@ -538,6 +570,7 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
                 }
 
                 it.increment(ec);
+                if (ec) ec.clear();
             }
             return false;
         };
@@ -573,18 +606,38 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
             // 递归找出资源目录中所有 DLL/pyd → 加入 BFS 分析其依赖
             // （挂在 dir_node 下，不加入 to_copy，整个目录已作为资源复制）
             std::error_code ec_r;
-            for (const auto& fe :
-                 fs::recursive_directory_iterator(resource_dir, ec_r))
-            {
-                if (!fe.is_regular_file()) continue;
+            fs::recursive_directory_iterator it(
+                resource_dir,
+                fs::directory_options::skip_permission_denied,
+                ec_r), end;
+            while (!ec_r && it != end) {
+                const auto& fe = *it;
+                std::error_code ec_file;
+                if (!fe.is_regular_file(ec_file)) {
+                    it.increment(ec_r);
+                    if (ec_r) ec_r.clear();
+                    continue;
+                }
                 std::string ext = ToLower(fe.path().extension().string());
-                if (ext != ".dll" && ext != ".pyd") continue;
+                if (ext != ".dll" && ext != ".pyd") {
+                    it.increment(ec_r);
+                    if (ec_r) ec_r.clear();
+                    continue;
+                }
                 std::string lower = ToLower(fe.path().filename().string());
                 std::string file_key = PathKey(fe.path());
-                if (!analyzed_files.insert(file_key).second) continue;
+                if (!analyzed_files.insert(file_key).second) {
+                    it.increment(ec_r);
+                    if (ec_r) ec_r.clear();
+                    continue;
+                }
                 if (target_machine != 0) {
                     uint16_t m = PEParser::GetMachineType(fe.path().string());
-                    if (m != 0 && m != target_machine) continue;
+                    if (m != 0 && m != target_machine) {
+                        it.increment(ec_r);
+                        if (ec_r) ec_r.clear();
+                        continue;
+                    }
                 }
                 auto node = std::make_shared<DepNode>();
                 node->name          = lower;
@@ -597,6 +650,8 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
                 dir_node->children.push_back(node); // 挂在目录节点下
                 queue.push({fe.path().string(), node.get()});
                 Log("[ResDir/PE] " + lower);
+                it.increment(ec_r);
+                if (ec_r) ec_r.clear();
             }
         };
 
@@ -607,13 +662,15 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
             std::error_code ec;
             if (!fs::exists(dir, ec)) return;
             for (const auto& entry : fs::directory_iterator(dir, ec)) {
-                if (!entry.is_directory()) continue;
+                std::error_code ec_entry;
+                if (!entry.is_directory(ec_entry)) continue;
                 std::string name = entry.path().filename().string();
                 if (is_skipped_dir_name(name)) {
                     if (is_binary_container_dir_name(name)) {
                         std::error_code ec_nested;
                         for (const auto& nested : fs::directory_iterator(entry.path(), ec_nested)) {
-                            if (!nested.is_directory()) continue;
+                            std::error_code ec_nested_entry;
+                            if (!nested.is_directory(ec_nested_entry)) continue;
                             std::string nested_name = nested.path().filename().string();
                             std::string nested_lower = ToLower(nested_name);
                             if (is_skipped_dir_name(nested_name)) {
@@ -644,7 +701,8 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
             if (!scanned_related_resource_roots.insert(root_key).second) return;
 
             for (const auto& entry : fs::directory_iterator(dir, ec)) {
-                if (!entry.is_directory()) continue;
+                std::error_code ec_entry;
+                if (!entry.is_directory(ec_entry)) continue;
                 std::string name = entry.path().filename().string();
                 if (is_skipped_dir_name(name)) continue;
 
@@ -660,16 +718,25 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
             }
         };
 
+    auto scan_related_data_files = [&](const fs::path& dir,
+                                       const std::string& log_tag) {
+            std::error_code ec;
+            if (!fs::is_directory(dir, ec)) return;
+
+            for (const auto& entry : fs::directory_iterator(dir, ec)) {
+                std::error_code ec_entry;
+                if (!entry.is_regular_file(ec_entry)) continue;
+                std::string ext = ToLower(entry.path().extension().string());
+                if (ext == ".dll" || ext == ".pyd" || ext == ".exe") continue;
+                if (kSkipExt.count(ext)) continue;
+                if (!kResourceFileExt.count(ext)) continue;
+                add_data_file(entry.path(), entry.path().filename().string(), log_tag);
+            }
+        };
+
     auto scan_related_resource_roots = [&](const fs::path& dll_path) {
             fs::path dll_dir = dll_path.parent_path();
             scan_related_resource_dir(dll_dir, "[SiblingRes]");
-
-            std::string dir_name = ToLower(dll_dir.filename().string());
-            if (kBinaryContainerDirNames.count(dir_name)) {
-                fs::path package_root = dll_dir.parent_path();
-                if (!package_root.empty())
-                    scan_related_resource_dir(package_root, "[SiblingRes]");
-            }
         };
 
     auto add_support_dll = [&](const fs::path& dll_path,
@@ -700,13 +767,28 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
             Log(log_tag + " " + lower + " -> " + dll_path.string());
         };
 
+    auto scan_related_pe_files = [&](const fs::path& dir,
+                                     const std::string& log_tag) {
+            std::error_code ec;
+            if (!fs::is_directory(dir, ec)) return;
+
+            for (const auto& entry : fs::directory_iterator(dir, ec)) {
+                std::error_code ec_entry;
+                if (!entry.is_regular_file(ec_entry)) continue;
+                std::string ext = ToLower(entry.path().extension().string());
+                if (ext != ".dll" && ext != ".pyd") continue;
+                add_support_dll(entry.path(), log_tag);
+            }
+        };
+
     auto add_qt_runtime_siblings = [&](const fs::path& qt_dll_path) {
             fs::path dir = qt_dll_path.parent_path();
             std::error_code ec;
             if (!fs::is_directory(dir, ec)) return;
 
             for (const auto& entry : fs::directory_iterator(dir, ec)) {
-                if (!entry.is_regular_file()) continue;
+                std::error_code ec_entry;
+                if (!entry.is_regular_file(ec_entry)) continue;
                 std::string name = ToLower(entry.path().filename().string());
                 bool should_copy =
                     name == "libegl.dll" ||
@@ -746,7 +828,9 @@ DepReport DepResolver::Resolve(const std::string& target_exe) {
                 // 用户显式添加的路径本身就是依赖资源根，例如 assets/scripts/images。
                 add_resource_root(dir, root_name, "[UserRes]");
             } else {
-                // 容器目录：沿用旧行为，部署其中的顶层资源子目录。
+                // 容器目录：部署其中的顶层资源子目录，并保留顶层相关 PE/资源文件。
+                scan_related_pe_files(dir, "[UserPE]");
+                scan_related_data_files(dir, "[UserData]");
                 scan_resource_dir(p);
             }
         }
@@ -1036,7 +1120,8 @@ void DepResolver::DiscoverQtPlugins(DepReport& report) const
         // 确认子目录中有可执行二进制文件
         bool has_bin = false;
         for (const auto& e : fs::directory_iterator(sub_dir, ec)) {
-            if (!e.is_regular_file()) continue;
+            std::error_code ec_entry;
+            if (!e.is_regular_file(ec_entry)) continue;
             std::string ext = e.path().extension().string();
             for (auto& c : ext) c = (char)::tolower((unsigned char)c);
             if (ext == ".dll" || ext == ".so" || ext == ".dylib" ||
@@ -1158,7 +1243,8 @@ void DepResolver::RunQtDeployTool(const std::string& target_exe,
 
     // 合并输出：顶层 DLL → to_copy，子目录 → resource_dirs
     for (const auto& entry : fs::directory_iterator(temp_out, ec)) {
-        if (entry.is_regular_file()) {
+        std::error_code ec_entry;
+        if (entry.is_regular_file(ec_entry)) {
             std::string ext = entry.path().extension().string();
             for (auto& c : ext) c = (char)::tolower((unsigned char)c);
             if (ext != ".dll" && ext != ".so" && ext != ".dylib") continue;
@@ -1175,7 +1261,7 @@ void DepResolver::RunQtDeployTool(const std::string& target_exe,
             report.node_pool.push_back(node);
             report.to_copy.push_back(node.get());
             Log("[QtDeploy] + " + lower_name);
-        } else if (entry.is_directory()) {
+        } else if (entry.is_directory(ec_entry)) {
             std::string dir_name = entry.path().filename().string();
             std::string key = ToLower(entry.path().string());
             if (!known_dirs.insert(key).second) continue;

@@ -50,7 +50,7 @@
 - **Dependency analysis** — Parses PE import tables and builds a full dependency tree via BFS.
 - **DLL classification** — Separates OS core DLLs, network DLLs, third-party DLLs, redistributables, and ApiSet DLLs.
 - **Resource packaging** — Keeps folders such as `assets/`, `images/`, `scripts/`, `docs/`, `plugins/`, `packages/`, `webview2_runtime/`.
-- **Smart directory skip** — Ignores build-output directories (`bin/`, `Release/`, `Debug/`, `x64/`, `_deploy/`, etc.) to avoid polluting the output.
+- **Smart directory skip** — Ignores exact-case build-output directories (`bin/`, `release/`, `debug/`, `x64/`, `_deploy/`, etc.) to avoid polluting the output.
 - **Deployment** — Copies required files into a clean deployment directory.
 - **ZIP packaging** — Creates ZIP archives with real-time per-file compression progress (0 → 100 %).
 - **NSIS installer** — Generates NSIS installers with Start Menu and desktop shortcuts.
@@ -58,7 +58,7 @@
 - **Recent files** — File menu remembers the last 10 opened executables; click to re-open instantly.
 - **Session log & history** — Every analysis session is auto-saved to `logs/YYYY-MM-DD_HH-MM-SS_App.log`; browse and export from the app.
 - **Compatibility checks** — Warns about WebView2 Runtime versions incompatible with Windows 7 / 8.1.
-- **UI** — Supports Chinese/English languages and light/dark/system themes.
+- **UI** — Supports Chinese/English language switching from the in-app Language menu, plus light/dark/system themes.
 
 ---
 
@@ -166,10 +166,12 @@ cmake --build .\build_qt --config Release -j4
     }
   }
   ```
-- Resource folders are copied only when they look like real application assets; common build-output folders such as `bin/`, `build/`, `Debug/`, `Release/`, `x64/`, and `x86/` are skipped automatically.
-- You can add custom resource-scan exclusions via `classifier.extra_excluded_dirs` (case-insensitive directory names), useful for excluding Conda/Python runtime folders.
-- In the wxWidgets frontend, *Excluded Directories* supports bulk input using comma-separated names (both `,` and `，`).
-- In both frontends, you can drag a DLL item from the dependency tree into *Excluded Directories* to add its base name quickly (case-insensitive duplicate check applies).
+- Resource folders are copied only when they look like real application assets; built-in skips such as `bin/`, `build/`, `debug/`, `release/`, `x64/`, and `x86/` are matched case-sensitively.
+- You can add custom resource-scan exclusions via `classifier.extra_excluded_dirs` (case-sensitive directory names), useful for excluding Conda/Python runtime folders.
+- In both frontends, *Excluded Directories* supports bulk input using comma-separated names (both `,` and `，`) and keeps case-sensitive entries distinct.
+- Custom resource scan paths include matching resource subdirectories and top-level related resource files in the analysis result.
+- After analysis, select a dependency, resource directory, or data file in the tree and use *Remove Selected* to exclude it from the current deploy/ZIP result.
+- In both frontends, you can drag a DLL item from the dependency tree into *Excluded Directories* to add its base name quickly.
 - Use *File → Recent Files* to quickly reopen previously analysed targets.
 - Open *File → History Logs* to browse or export any past analysis session log.
 

@@ -179,6 +179,12 @@ msgstr "请先运行分析。"
 msgid "Please select an executable first."
 msgstr "请先选择一个可执行文件。"
 
+msgid "Analysis failed."
+msgstr "分析失败。"
+
+msgid "Analysis failed:\n"
+msgstr "分析失败:\n"
+
 msgid "LibDeploy"
 msgstr "LibDeploy"
 
@@ -321,8 +327,14 @@ msgstr "没有分析结果。"
 msgid "Excluded Directories"
 msgstr "排除目录"
 
-msgid "Tip: use commas to add multiple directory names at once; matching is case-insensitive."
-msgstr "提示: 可使用逗号一次添加多个目录名；匹配不区分大小写。"
+msgid "Tip: use commas to add multiple directory names at once; matching is case-sensitive."
+msgstr "提示: 可使用逗号一次添加多个目录名；匹配区分大小写。"
+
+msgid "Remove Selected"
+msgstr "移除选中项"
+
+msgid "Removed selected item from this analysis result."
+msgstr "已从本次分析结果中移除选中项。"
 
 msgid "Enter directory names to exclude, separated by commas:"
 msgstr "输入要排除的目录名（用逗号分隔）:"

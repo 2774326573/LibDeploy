@@ -75,6 +75,7 @@ private:
     void OnAddExcludedDir(wxCommandEvent&);
     void OnRemoveExcludedDir(wxCommandEvent&);
     void OnClearExcludedDirs(wxCommandEvent&);
+    void OnRemoveSelectedResult(wxCommandEvent&);
     void OnTreeSelChanged(wxTreeEvent&);
     void OnTreeBeginDrag(wxTreeEvent&);
     void OnClose(wxCloseEvent&);

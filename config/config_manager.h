@@ -30,7 +30,7 @@ struct AppConfig {
     struct RedistRule { std::string prefix; std::string package; bool always_deploy; };
     std::vector<RedistRule> extra_redist;
     std::vector<std::string> user_excluded; // 用户手动排除，不分析也不部署
-    std::vector<std::string> extra_excluded_dirs; // 资源扫描时排除的目录名（小写）
+    std::vector<std::string> extra_excluded_dirs; // 资源扫描时排除的目录名（区分大小写）
     std::string qt_deploy_tool; // 空 = 自动查找 windeployqt / linuxdeployqt
 };
 

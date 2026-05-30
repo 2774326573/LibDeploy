@@ -42,16 +42,17 @@ build/bin/
 直接将 `build/bin/` 目录整体复制到目标机器即可运行，无需安装任何依赖。
 
 > 使用 LibDeploy 分析和部署程序时，自动资源目录扫描会跳过常见构建输出目录，
-> 例如 `bin/`、`build/`、`Debug/`、`Release/`、`RelWithDebInfo/`、
-> `MinSizeRel/`、`x64/`、`x86/`、`Win32/`、`Win64/` 和 `*_deploy/`。
+> 例如 `bin/`、`build/`、`debug/`、`release/`、`relwithdebinfo/`、
+> `minsizerel/`、`x64/`、`x86/`、`win32/`、`win64/` 和 `*_deploy/`。
 > 这些目录不会被当作应用资源复制到部署目录、ZIP 或安装包中。
+> 内置跳过项和用户追加的 `extra_excluded_dirs` 都按大小写精确匹配；如需跳过 `Debug/` 或 `Release/`，请按实际大小写添加。
 
 ### 资源扫描排除目录（可配置）
 
 除内置跳过目录外，用户还可以通过配置追加排除规则：
 
 - 配置项：`classifier.extra_excluded_dirs`
-- 作用：按目录名排除资源扫描（不区分大小写）
+- 作用：按目录名排除资源扫描（区分大小写）
 - 典型用途：避免将 Conda / Python 环境目录误识别为项目资源
 
 示例：
@@ -72,8 +73,9 @@ build/bin/
 }
 ```
 
-wxWidgets 前端已提供 **Excluded Directories** 面板，支持一次输入多个目录名（用英文逗号或中文逗号分隔）。
-Qt 前端会读取同一配置项并在分析时生效。
+wxWidgets 和 Qt 前端均提供 **Excluded Directories** 面板，支持一次输入多个目录名（用英文逗号或中文逗号分隔），并按大小写区分不同目录名。
+
+用户添加的自定义资源扫描路径会同时参与分析：如果路径本身是资源根目录，会作为资源目录整体部署；如果它是容器目录，会继续发现其中的资源子目录，并把顶层相关资源文件纳入 `data_files`。分析完成后，可在依赖树中选中依赖、资源目录或数据文件，使用 **Remove Selected / 移除选中项** 从本次部署、ZIP 和安装包结果中剔除。
 
 ## Qt 前端构建
 

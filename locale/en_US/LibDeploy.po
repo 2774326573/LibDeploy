@@ -179,6 +179,12 @@ msgstr "Run Analyze first."
 msgid "Please select an executable first."
 msgstr "Please select an executable first."
 
+msgid "Analysis failed."
+msgstr "Analysis failed."
+
+msgid "Analysis failed:\n"
+msgstr "Analysis failed:\n"
+
 msgid "LibDeploy"
 msgstr "LibDeploy"
 
@@ -321,8 +327,14 @@ msgstr "No analysis result."
 msgid "Excluded Directories"
 msgstr "Excluded Directories"
 
-msgid "Tip: use commas to add multiple directory names at once; matching is case-insensitive."
-msgstr "Tip: use commas to add multiple directory names at once; matching is case-insensitive."
+msgid "Tip: use commas to add multiple directory names at once; matching is case-sensitive."
+msgstr "Tip: use commas to add multiple directory names at once; matching is case-sensitive."
+
+msgid "Remove Selected"
+msgstr "Remove Selected"
+
+msgid "Removed selected item from this analysis result."
+msgstr "Removed selected item from this analysis result."
 
 msgid "Enter directory names to exclude, separated by commas:"
 msgstr "Enter directory names to exclude, separated by commas:"

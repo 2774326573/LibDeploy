@@ -198,8 +198,16 @@ Qt frontend for dependency analysis and deployment.</source>
         <translation>提示: 优先搜索本工具目录；是否搜索系统 PATH 由配置控制。</translation>
     </message>
     <message>
-        <source>Tip: use commas to add multiple directory names at once; matching is case-insensitive.</source>
-        <translation>提示: 可使用逗号一次添加多个目录名；匹配不区分大小写。</translation>
+        <source>Tip: use commas to add multiple directory names at once; matching is case-sensitive.</source>
+        <translation>提示: 可使用逗号一次添加多个目录名；匹配区分大小写。</translation>
+    </message>
+    <message>
+        <source>Remove Selected</source>
+        <translation>移除选中项</translation>
+    </message>
+    <message>
+        <source>Removed selected item from this analysis result.</source>
+        <translation>已从本次分析结果中移除选中项。</translation>
     </message>
     <message>
         <source>Redistributable Requirements:</source>
@@ -224,6 +232,14 @@ Qt frontend for dependency analysis and deployment.</source>
     <message>
         <source>ERROR: </source>
         <translation>错误: </translation>
+    </message>
+    <message>
+        <source>Analysis failed.</source>
+        <translation>分析失败。</translation>
+    </message>
+    <message>
+        <source>Analysis failed: %1</source>
+        <translation>分析失败: %1</translation>
     </message>
     <message>
         <source>Files copied: %1

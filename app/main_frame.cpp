@@ -19,8 +19,10 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <chrono>
+#include <exception>
 #include <iomanip>
 #include <sstream>
 #include <thread>
@@ -44,6 +46,7 @@ enum {
     ID_ADD_EXCLUDE_DIR,
     ID_REMOVE_EXCLUDE_DIR,
     ID_CLEAR_EXCLUDE_DIR,
+    ID_REMOVE_SELECTED_RESULT,
     ID_LANG_EN,
     ID_LANG_ZH,
     ID_THEME_SYSTEM,
@@ -117,15 +120,24 @@ static wxString NormalizeExcludedDirToken(wxString token)
     if (cut != wxNOT_FOUND) token = token.Mid(cut + 1);
 
     token.Trim(true).Trim(false);
-    token.MakeLower();
 
     // If a DLL name is dropped, keep its base name
-    if (token.EndsWith(".dll")) {
+    wxString lower_token = token.Lower();
+    if (lower_token.EndsWith(".dll")) {
         token = token.Left(token.Length() - 4);
     }
 
     token.Trim(true).Trim(false);
     return token;
+}
+
+static std::string ReportPathKey(const std::string& path)
+{
+    std::string key = path;
+    std::replace(key.begin(), key.end(), '\\', '/');
+    std::transform(key.begin(), key.end(), key.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return key;
 }
 
 static void ApplyThemeRecursive(wxWindow* window,
@@ -164,6 +176,7 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_BUTTON(ID_ADD_EXCLUDE_DIR,    MainFrame::OnAddExcludedDir)
     EVT_BUTTON(ID_REMOVE_EXCLUDE_DIR, MainFrame::OnRemoveExcludedDir)
     EVT_BUTTON(ID_CLEAR_EXCLUDE_DIR,  MainFrame::OnClearExcludedDirs)
+    EVT_BUTTON(ID_REMOVE_SELECTED_RESULT, MainFrame::OnRemoveSelectedResult)
     EVT_TREE_SEL_CHANGED(wxID_ANY, MainFrame::OnTreeSelChanged)
     EVT_TREE_BEGIN_DRAG(wxID_ANY, MainFrame::OnTreeBeginDrag)
     EVT_CLOSE(MainFrame::OnClose)
@@ -323,6 +336,8 @@ void MainFrame::BuildUI() {
     detail_box->Add(m_detail_name, 0, wxEXPAND | wxALL, 2);
     detail_box->Add(m_detail_path, 0, wxEXPAND | wxALL, 2);
     detail_box->Add(m_detail_cat,  0, wxEXPAND | wxALL, 2);
+    detail_box->Add(new wxButton(right_panel, ID_REMOVE_SELECTED_RESULT, _("Remove Selected")),
+                    0, wxEXPAND | wxALL, 2);
     right_vbox->Add(detail_box, 0, wxEXPAND | wxALL, 4);
 
     // Search paths
@@ -359,7 +374,7 @@ void MainFrame::BuildUI() {
     exclude_box->Add(exclude_btn_row, 0, wxEXPAND | wxTOP, 2);
 
     exclude_box->Add(new wxStaticText(right_panel, wxID_ANY,
-        _("Tip: use commas to add multiple directory names at once; matching is case-insensitive.")),
+        _("Tip: use commas to add multiple directory names at once; matching is case-sensitive.")),
         0, wxTOP, 4);
     right_vbox->Add(exclude_box, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
 
@@ -550,6 +565,7 @@ void MainFrame::RunAnalyzeAsync(const wxString& path) {
         bool                     done = false;
         std::vector<std::string> log_lines;
         DepReport                report;
+        std::string              error;
     };
     auto state = std::make_shared<SharedState>();
 
@@ -579,28 +595,38 @@ void MainFrame::RunAnalyzeAsync(const wxString& path) {
     std::thread worker([state, path_str, effective_paths,
                         resource_scan_paths, target_os,
                         follow_system_path, extra_os_core, extra_redist, user_excluded, extra_excluded_dirs]() {
-        DepResolver resolver(
-            target_os,
-            effective_paths,
-            follow_system_path,
-            [&state](const std::string& msg) {
-                std::lock_guard<std::mutex> lk(state->mtx);
-                state->msg = msg;
-                state->log_lines.push_back(msg);
-            },
-            resource_scan_paths
-        );
-        for (const auto& name : extra_os_core)
-            resolver.AddOsCore(name);
-        for (const auto& r : extra_redist)
-            resolver.AddRedistRule(r.prefix, r.package, r.always_deploy);
-        if (!user_excluded.empty())
-            resolver.SetUserExcluded(user_excluded);
-        if (!extra_excluded_dirs.empty())
-            resolver.SetExtraExcludedDirs(extra_excluded_dirs);
-        state->report = resolver.Resolve(path_str);
-        std::lock_guard<std::mutex> lk(state->mtx);
-        state->done = true;
+        try {
+            DepResolver resolver(
+                target_os,
+                effective_paths,
+                follow_system_path,
+                [&state](const std::string& msg) {
+                    std::lock_guard<std::mutex> lk(state->mtx);
+                    state->msg = msg;
+                    state->log_lines.push_back(msg);
+                },
+                resource_scan_paths
+            );
+            for (const auto& name : extra_os_core)
+                resolver.AddOsCore(name);
+            for (const auto& r : extra_redist)
+                resolver.AddRedistRule(r.prefix, r.package, r.always_deploy);
+            if (!user_excluded.empty())
+                resolver.SetUserExcluded(user_excluded);
+            if (!extra_excluded_dirs.empty())
+                resolver.SetExtraExcludedDirs(extra_excluded_dirs);
+            state->report = resolver.Resolve(path_str);
+        } catch (const std::exception& e) {
+            std::lock_guard<std::mutex> lk(state->mtx);
+            state->error = e.what();
+        } catch (...) {
+            std::lock_guard<std::mutex> lk(state->mtx);
+            state->error = "Unknown analysis error.";
+        }
+        {
+            std::lock_guard<std::mutex> lk(state->mtx);
+            state->done = true;
+        }
     });
 
     // 主线程轮询：Pulse() 驱动不确定进度动画，同时将日志刷到 UI
@@ -625,6 +651,15 @@ void MainFrame::RunAnalyzeAsync(const wxString& path) {
 
     worker.join();
     dlg->Destroy();
+
+    if (!state->error.empty()) {
+        Log("ERROR: " + wxString::FromUTF8(state->error));
+        SetStatusText(_("Analysis failed."));
+        wxMessageBox(_("Analysis failed:\n") + wxString::FromUTF8(state->error),
+                     _("LibDeploy"), wxOK | wxICON_ERROR, this);
+        SaveSessionLog();
+        return;
+    }
 
     m_report     = std::move(state->report);
     m_has_report = true;
@@ -1047,6 +1082,52 @@ void MainFrame::OnClearExcludedDirs(wxCommandEvent&) {
     m_cfg.extra_excluded_dirs.clear();
     RefreshExcludedDirsList();
     ConfigManager::Save(m_cfg);
+}
+
+void MainFrame::OnRemoveSelectedResult(wxCommandEvent&) {
+    if (!m_has_report || !m_dep_tree) return;
+
+    wxTreeItemId id = m_dep_tree->GetSelection();
+    if (!id.IsOk() || id == m_dep_tree->GetRootItem()) return;
+
+    auto* nd = dynamic_cast<NodeData*>(m_dep_tree->GetItemData(id));
+    if (!nd || !nd->node) return;
+
+    const DepNode* node = nd->node;
+    const std::string key = ReportPathKey(node->resolved_path);
+
+    auto erase_nodes = [&](std::vector<DepNode*>& nodes) {
+        nodes.erase(std::remove_if(nodes.begin(), nodes.end(), [&](const DepNode* n) {
+            if (n == node) return true;
+            return n && !n->resolved_path.empty() && ReportPathKey(n->resolved_path) == key;
+        }), nodes.end());
+    };
+
+    erase_nodes(m_report.to_copy);
+    erase_nodes(m_report.maybe_absent);
+    erase_nodes(m_report.missing);
+
+    if (!key.empty()) {
+        m_report.data_files.erase(
+            std::remove_if(m_report.data_files.begin(), m_report.data_files.end(),
+                           [&](const std::string& p) { return ReportPathKey(p) == key; }),
+            m_report.data_files.end());
+        m_report.resource_dirs.erase(
+            std::remove_if(m_report.resource_dirs.begin(), m_report.resource_dirs.end(),
+                           [&](const ResourceDir& rd) { return ReportPathKey(rd.src_path) == key; }),
+            m_report.resource_dirs.end());
+    }
+
+    auto* mutable_node = const_cast<DepNode*>(node);
+    mutable_node->status = DepStatus::UserExcluded;
+    mutable_node->need_deploy = false;
+
+    m_dep_tree->Delete(id);
+    m_detail_name->SetLabel(_("(select a node)"));
+    m_detail_path->SetLabel("");
+    m_detail_cat->SetLabel("");
+    UpdateRedistWarning(m_report);
+    SetStatusText(_("Removed selected item from this analysis result."));
 }
 
 void MainFrame::OnTreeSelChanged(wxTreeEvent& evt) {

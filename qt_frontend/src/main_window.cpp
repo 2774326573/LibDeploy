@@ -33,6 +33,8 @@
 #include <QRegExp>
 
 #include <algorithm>
+#include <cctype>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -118,12 +120,20 @@ QString normalizeExcludedDirToken(QString token)
     int cut = std::max(slash, backslash);
     if (cut >= 0) token = token.mid(cut + 1);
 
-    token = token.trimmed().toLower();
+    token = token.trimmed();
 
     // If a DLL name is dropped, keep its base name
-    if (token.endsWith(".dll")) token.chop(4);
+    if (token.endsWith(".dll", Qt::CaseInsensitive)) token.chop(4);
 
     return token.trimmed();
+}
+
+std::string reportPathKey(const std::string& path)
+{
+    std::string key = QDir::fromNativeSeparators(QString::fromUtf8(path.c_str())).toStdString();
+    std::transform(key.begin(), key.end(), key.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return key;
 }
 }
 
@@ -180,6 +190,14 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&m_analyzeWatcher, &QFutureWatcher<AnalyzeResult>::finished, this, [this]() {
         AnalyzeResult result = m_analyzeWatcher.result();
         for (const QString& line : result.logs) appendLog(line);
+        if (!result.error.isEmpty()) {
+            appendLog(tr("ERROR: ") + result.error);
+            showNotice(tr("Analysis failed: %1").arg(result.error), true);
+            statusBar()->showMessage(tr("Analysis failed."), 15000);
+            setBusy(false);
+            saveSessionLog();
+            return;
+        }
         m_report = std::move(result.report);
         m_hasReport = true;
         populateTree();
@@ -383,9 +401,12 @@ void MainWindow::buildUi()
     m_detailPath = new QLabel;
     m_detailPath->setWordWrap(true);
     m_detailCategory = new QLabel;
+    m_removeResultButton = new QPushButton;
+    connect(m_removeResultButton, &QPushButton::clicked, this, &MainWindow::removeSelectedResult);
     detailLayout->addWidget(m_detailName);
     detailLayout->addWidget(m_detailPath);
     detailLayout->addWidget(m_detailCategory);
+    detailLayout->addWidget(m_removeResultButton);
     side->addWidget(m_detailGroup);
 
     m_pathsGroup = new QGroupBox;
@@ -621,6 +642,7 @@ void MainWindow::retranslateUi()
     if (m_tree) m_tree->setHeaderLabels({tr("Dependency"), tr("Status"), tr("Category")});
     if (m_detailGroup) m_detailGroup->setTitle(tr("Detail"));
     if (m_detailName && !m_tree->currentItem()) m_detailName->setText(tr("(select a node)"));
+    if (m_removeResultButton) m_removeResultButton->setText(tr("Remove Selected"));
     if (m_pathsGroup) m_pathsGroup->setTitle(tr("Search Paths"));
     if (m_addPathButton) m_addPathButton->setText(tr("Add"));
     if (m_removePathButton) m_removePathButton->setText(tr("Del"));
@@ -631,7 +653,7 @@ void MainWindow::retranslateUi()
     if (m_addExcludedButton) m_addExcludedButton->setText(tr("Add"));
     if (m_removeExcludedButton) m_removeExcludedButton->setText(tr("Del"));
     if (m_clearExcludedButton) m_clearExcludedButton->setText(tr("Clear"));
-    if (m_excludedTipLabel) m_excludedTipLabel->setText(tr("Tip: use commas to add multiple directory names at once; matching is case-insensitive."));
+    if (m_excludedTipLabel) m_excludedTipLabel->setText(tr("Tip: use commas to add multiple directory names at once; matching is case-sensitive."));
     if (m_redistPanel) m_redistPanel->setTitle(tr("Redistributable Requirements:"));
     if (m_logLabel) m_logLabel->setText(tr("Log:"));
     if (statusBar()->currentMessage().isEmpty()) statusBar()->showMessage(tr("Ready"));
@@ -682,24 +704,30 @@ void MainWindow::startAnalyze(bool runQtDeployTool)
     QString exePath = path;
     m_analyzeWatcher.setFuture(QtConcurrent::run([cfg, exePath, runQtDeployTool]() {
         AnalyzeResult result;
-        std::vector<std::string> paths;
-        for (const auto& p : cfg.search_paths) paths.push_back(p);
+        try {
+            std::vector<std::string> paths;
+            for (const auto& p : cfg.search_paths) paths.push_back(p);
 
-        std::vector<std::string> resourcePaths = cfg.search_paths;
-        DepResolver resolver(cfg.target_os, paths, cfg.follow_system_path,
-            [&result](const std::string& msg) {
-                result.logs.push_back(qstr(msg));
-            },
-            resourcePaths);
-        for (const auto& name : cfg.extra_os_core) resolver.AddOsCore(name);
-        for (const auto& rule : cfg.extra_redist)
-            resolver.AddRedistRule(rule.prefix, rule.package, rule.always_deploy);
-        if (!cfg.user_excluded.empty()) resolver.SetUserExcluded(cfg.user_excluded);
-        if (!cfg.extra_excluded_dirs.empty()) resolver.SetExtraExcludedDirs(cfg.extra_excluded_dirs);
-        if (!cfg.qt_deploy_tool.empty()) resolver.SetQtDeployTool(cfg.qt_deploy_tool);
-        resolver.SetRunQtDeployTool(runQtDeployTool);
+            std::vector<std::string> resourcePaths = cfg.search_paths;
+            DepResolver resolver(cfg.target_os, paths, cfg.follow_system_path,
+                [&result](const std::string& msg) {
+                    result.logs.push_back(qstr(msg));
+                },
+                resourcePaths);
+            for (const auto& name : cfg.extra_os_core) resolver.AddOsCore(name);
+            for (const auto& rule : cfg.extra_redist)
+                resolver.AddRedistRule(rule.prefix, rule.package, rule.always_deploy);
+            if (!cfg.user_excluded.empty()) resolver.SetUserExcluded(cfg.user_excluded);
+            if (!cfg.extra_excluded_dirs.empty()) resolver.SetExtraExcludedDirs(cfg.extra_excluded_dirs);
+            if (!cfg.qt_deploy_tool.empty()) resolver.SetQtDeployTool(cfg.qt_deploy_tool);
+            resolver.SetRunQtDeployTool(runQtDeployTool);
 
-        result.report = resolver.Resolve(str(exePath));
+            result.report = resolver.Resolve(str(exePath));
+        } catch (const std::exception& e) {
+            result.error = QString::fromUtf8(e.what());
+        } catch (...) {
+            result.error = QStringLiteral("Unknown analysis error.");
+        }
         return result;
     }));
 }
@@ -919,7 +947,7 @@ void MainWindow::addExcludedDir()
 
     std::unordered_set<std::string> existing;
     for (const auto& dir : m_config.extra_excluded_dirs)
-        existing.insert(str(qstr(dir).trimmed().toLower()));
+        existing.insert(str(qstr(dir).trimmed()));
 
     int added = 0;
     int skipped = 0;
@@ -983,7 +1011,7 @@ void MainWindow::addExcludedDirFromDrag(const QString& text)
 
     std::unordered_set<std::string> existing;
     for (const auto& dir : m_config.extra_excluded_dirs)
-        existing.insert(str(qstr(dir).trimmed().toLower()));
+        existing.insert(str(qstr(dir).trimmed()));
 
     int added = 0;
     int skipped = 0;
@@ -1007,6 +1035,50 @@ void MainWindow::addExcludedDirFromDrag(const QString& text)
             statusBar()->showMessage(tr("Added %1 directories, skipped %2 duplicates.").arg(added).arg(skipped), 8000);
         }
     }
+}
+
+void MainWindow::removeSelectedResult()
+{
+    if (!m_hasReport || !m_tree) return;
+    QTreeWidgetItem* item = m_tree->currentItem();
+    if (!item || !item->parent()) return;
+
+    auto* node = reinterpret_cast<DepNode*>(item->data(0, NodePtrRole).value<quintptr>());
+    if (!node) return;
+
+    const std::string path = node->resolved_path;
+    const std::string key = reportPathKey(path);
+
+    auto erase_nodes = [node, &key](std::vector<DepNode*>& nodes) {
+        nodes.erase(std::remove_if(nodes.begin(), nodes.end(), [&](const DepNode* n) {
+            if (n == node) return true;
+            return n && !n->resolved_path.empty() && reportPathKey(n->resolved_path) == key;
+        }), nodes.end());
+    };
+
+    erase_nodes(m_report.to_copy);
+    erase_nodes(m_report.maybe_absent);
+    erase_nodes(m_report.missing);
+
+    if (!key.empty()) {
+        m_report.data_files.erase(
+            std::remove_if(m_report.data_files.begin(), m_report.data_files.end(),
+                           [&](const std::string& p) { return reportPathKey(p) == key; }),
+            m_report.data_files.end());
+        m_report.resource_dirs.erase(
+            std::remove_if(m_report.resource_dirs.begin(), m_report.resource_dirs.end(),
+                           [&](const ResourceDir& rd) { return reportPathKey(rd.src_path) == key; }),
+            m_report.resource_dirs.end());
+    }
+
+    node->status = DepStatus::UserExcluded;
+    node->need_deploy = false;
+    delete item;
+    updateRedistPanel();
+    m_detailName->setText(tr("(select a node)"));
+    m_detailPath->clear();
+    m_detailCategory->clear();
+    statusBar()->showMessage(tr("Removed selected item from this analysis result."), 8000);
 }
 
 void MainWindow::populateTree()

@@ -54,6 +54,7 @@ private:
     struct AnalyzeResult {
         DepReport report;
         QStringList logs;
+        QString error;
     };
 
     struct DeployResult {
@@ -113,6 +114,7 @@ private:
     QPushButton*    m_addExcludedButton = nullptr;
     QPushButton*    m_removeExcludedButton = nullptr;
     QPushButton*    m_clearExcludedButton = nullptr;
+    QPushButton*    m_removeResultButton = nullptr;
 
     AppConfig m_config;
     DepReport m_report;
@@ -158,6 +160,7 @@ private:
     void addExcludedDir();
     void removeExcludedDir();
     void clearExcludedDirs();
+    void removeSelectedResult();
 
     void startAnalyze(bool runQtDeployTool = false);
     void startDeploy(const QString& destDir);
